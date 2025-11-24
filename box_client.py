@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 from typing import Optional
 
-from boxsdk import Client
+from box_sdk_gen import Client
 from models import FileMetadata
 
 
