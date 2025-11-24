@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Box アカウント情報</h1>
+<p><strong>名前:</strong> {{ user.name }}</p>
+<p><strong>メール:</strong> {{ user.login }}</p>
+
+<hr>
+
+<p>このアカウントでファイルをアップロードできます。</p>
+<a href="{{ url_for('upload') }}" class="btn">ファイルをアップロードする</a>
+<a href="{{ url_for('index') }}" class="btn btn-secondary">Home に戻る</a>
+{% endblock %}

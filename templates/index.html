@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>ようこそ</h1>
+<p>このアプリでは、Box にファイルをアップロードしつつ、後で Ethereum 側にも情報を送れるようにしていきます。</p>
+
+{% if logged_in %}
+<p>すでに Box にログイン済みです。</p>
+<a href="{{ url_for('upload') }}" class="btn">ファイルをアップロードする</a>
+{% else %}
+<p>まず Box にログインしてください。</p>
+<a href="{{ url_for('login') }}" class="btn">Box にログイン</a>
+{% endif %}
+{% endblock %}
