@@ -1,49 +1,30 @@
 # eth_client.py
-import json
-from pathlib import Path
-from typing import Any, Dict
-
-from web3 import Web3
-from models import FileMetadata
-
 
 class EthereumClient:
-    def __init__(
-        self,
-        rpc_url: str,
-        private_key: str,
-        contract_address: str,
-        abi_path: str,
-    ):
-        self._w3 = Web3(Web3.HTTPProvider(rpc_url))
-        if not self._w3.is_connected():
-            raise RuntimeError("Failed to connect to Ethereum node")
+    """
+    Ethereum への書き込み処理をまとめるクラス。
 
-        self._account = self._w3.eth.account.from_key(private_key)
+    今はまだ「ダミー実装」で、実際のブロックチェーンには送らず、
+    コンソールにログを出してダミーのトランザクションハッシュを返す。
 
-        abi = json.loads(Path(abi_path).read_text(encoding="utf-8"))
-        self._contract = self._w3.eth.contract(
-            address=self._w3.to_checksum_address(contract_address),
-            abi=abi,
-        )
+    後で web3.py を使って本物のトランザクション送信に差し替える。
+    """
 
-    def register_file(self, meta: FileMetadata) -> str:
+    def __init__(self) -> None:
+        # 将来ここで RPC URL や コントラクトアドレスを読み込む予定
+        pass
+
+    def store_file_record(self, file_hash: str, box_file_id: str, box_file_name: str) -> str:
         """
-        FileMetadata から必要な情報を取り出し、コントラクトに送信する。
-        戻り値はトランザクションハッシュ（hex）。
-        """
-        tx = self._contract.functions.registerFile(
-            meta.box_file_id,
-            meta.box_file_url,
-            meta.file_hash,
-        ).build_transaction({
-            "from": self._account.address,
-            "nonce": self._w3.eth.get_transaction_count(self._account.address),
-            "gas": 300000,
-            "maxFeePerGas": self._w3.to_wei("20", "gwei"),
-            "maxPriorityFeePerGas": self._w3.to_wei("1", "gwei"),
-        })
+        ファイルのハッシュ値と Box の情報を「ブロックチェーンに送ったつもり」で処理する。
 
-        signed = self._account.sign_transaction(tx)
-        tx_hash = self._w3.eth.send_raw_transaction(signed.rawTransaction)
-        return tx_hash.hex()
+        :return: ダミーのトランザクションハッシュ文字列
+        """
+        print("[EthereumClient] store_file_record called")
+        print(f"  file_hash   = {file_hash}")
+        print(f"  box_file_id = {box_file_id}")
+        print(f"  box_file_name = {box_file_name}")
+
+        # 本物実装では実際の tx_hash を返す
+        dummy_tx_hash = "0xDUMMY_TX_HASH"
+        return dummy_tx_hash

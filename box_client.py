@@ -1,54 +1,68 @@
 # box_client.py
+
 import hashlib
-from pathlib import Path
-from typing import Optional
+from io import BytesIO
+from typing import Optional, Dict, Any
 
 from boxsdk import Client
-from models import FileMetadata
+from boxsdk.exception import BoxAPIException
+from werkzeug.datastructures import FileStorage
 
 
 class BoxUploader:
-    def __init__(self, client: Client, parent_folder_id: str = "0"):
-        """
-        :param client: 認証済みの boxsdk.Client インスタンス
-        :param parent_folder_id: アップロード先フォルダ（デフォルトはルート "0"）
-        """
+    """
+    Box へのファイルアップロード処理をまとめたクラス（Flask用）
+
+    - Flask の request.files['file']（FileStorage）を受け取る
+    - デフォルトではルートフォルダ（"0"）にアップロード
+    - 同名ファイルがあれば新バージョンとして更新
+    - 同時にファイル内容の SHA-256 ハッシュも計算して返す
+    """
+
+    def __init__(self, client: Client, default_folder_id: str = "0") -> None:
         self._client = client
-        self._parent_folder_id = parent_folder_id
+        self._default_folder_id = default_folder_id
 
-    def _calc_sha256(self, path: Path) -> str:
-        hasher = hashlib.sha256()
-        with path.open("rb") as f:
-            for chunk in iter(lambda: f.read(8192), b""):
-                hasher.update(chunk)
-        return hasher.hexdigest()
-
-    def upload_file(self, local_path: str) -> FileMetadata:
+    def upload_file(
+        self,
+        file_storage: FileStorage,
+        folder_id: Optional[str] = None,
+    ):
         """
-        ローカルファイルを Box にアップロードし、FileMetadata を返す。
+        Flask の FileStorage を受け取って Box にアップロードし、
+        (uploaded_file, conflict_info, file_hash) を返す。
+
+        conflict_info:
+          - None              … 新規アップロード
+          - dict(conflicts..) … 同名ファイルがすでにあり、新バージョンとして保存した場合
+
+        file_hash:
+          - アップロードしたファイル内容の SHA-256 ハッシュ（16進文字列）
         """
-        path = Path(local_path)
-        if not path.is_file():
-            raise FileNotFoundError(f"File not found: {local_path}")
+        target_folder_id = folder_id or self._default_folder_id
 
-        file_hash = self._calc_sha256(path)
+        # 中身を一度メモリに載せておく（409時の再アップロード＆ハッシュ計算に使う）
+        content = file_storage.read()
+        file_hash = hashlib.sha256(content).hexdigest()
+        stream = BytesIO(content)
 
-        folder = self._client.folder(self._parent_folder_id)
-        uploaded = folder.upload(str(path), file_name=path.name)
+        folder = self._client.folder(target_folder_id)
+        conflict_info: Optional[Dict[str, Any]] = None
 
-        # 共有リンク作成（読み取り専用）
-        uploaded = uploaded.update_info({
-            "shared_link": {
-                "access": "open",  # 必要に応じて company / collaborators に変更
-            }
-        })
+        try:
+            # 新規アップロードを試す
+            uploaded_file = folder.upload_stream(stream, file_storage.filename)
+        except BoxAPIException as e:
+            # 同名ファイルが存在する場合
+            if e.status == 409 and e.code == "item_name_in_use":
+                conflict_info = e.context_info.get("conflicts")
+                existing_file_id = conflict_info["id"]
 
-        shared_link = uploaded.shared_link["url"] if uploaded.shared_link else ""
+                # ストリームを先頭に戻してから、新バージョンとしてアップロード
+                stream.seek(0)
+                uploaded_file = self._client.file(existing_file_id).update_contents_with_stream(stream)
+            else:
+                # それ以外は一旦そのまま投げる
+                raise
 
-        return FileMetadata(
-            local_path=str(path),
-            box_file_id=uploaded.id,
-            box_file_name=uploaded.name,
-            box_file_url=shared_link,
-            file_hash=file_hash,
-        )
+        return uploaded_file, conflict_info, file_hash

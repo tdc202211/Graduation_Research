@@ -1,3 +1,5 @@
+from eth_client import EthereumClient
+from box_client import BoxUploader
 from flask import Flask, redirect, request, session, url_for, render_template
 from boxsdk import OAuth2, Client
 from dotenv import load_dotenv
@@ -16,6 +18,7 @@ BOX_CLIENT_ID = os.getenv("BOX_CLIENT_ID")
 BOX_CLIENT_SECRET = os.getenv("BOX_CLIENT_SECRET")
 BOX_REDIRECT_URI = os.getenv("BOX_REDIRECT_URI")
 
+eth_client = EthereumClient()
 
 def store_tokens(access_token, refresh_token):
     session["access_token"] = access_token
@@ -86,48 +89,35 @@ from io import BytesIO
 
 @app.route("/upload", methods=["GET", "POST"])
 def upload():
-    # ログイン済みかチェック
     client = build_client()
     if client is None:
         return redirect(url_for("login"))
 
-    # GET: フォーム表示
+    uploader = BoxUploader(client)
+
     if request.method == "GET":
         return render_template("upload.html")
 
-    # POST: ファイルアップロード処理
     file = request.files.get("file")
     if file is None or file.filename == "":
         return render_template("upload.html", error="ファイルが選択されていません。")
 
-    # 409 でリトライできるように、一度メモリに読み込む
-    content = file.read()
-    stream = BytesIO(content)
+    uploaded_file, conflict_info, file_hash = uploader.upload_file(file)
 
-    folder = client.folder("0")  # ルートフォルダ
-    conflict_info = None
-
-    try:
-        # まずは普通に新規アップロードを試みる
-        uploaded_file = folder.upload_stream(stream, file.filename)
-    except BoxAPIException as e:
-        # 同名ファイルがすでにある場合
-        if e.status == 409 and e.code == "item_name_in_use":
-            conflict_info = e.context_info.get("conflicts")
-            existing_file_id = conflict_info["id"]
-
-            # ストリームを先頭に戻してから「新しいバージョンとして更新」
-            stream.seek(0)
-            uploaded_file = client.file(existing_file_id).update_contents_with_stream(stream)
-        else:
-            # それ以外のエラーは一旦そのまま投げる
-            raise
+    # ここで EthereumClient に即送信（設計A）
+    tx_hash = eth_client.store_file_record(
+        file_hash=file_hash,
+        box_file_id=uploaded_file.id,
+        box_file_name=uploaded_file.name,
+    )
 
     return render_template(
         "upload_result.html",
         file_name=uploaded_file.name,
         file_id=uploaded_file.id,
-        conflict=conflict_info,  # None → 新規 / あり → 既存の新バージョン
+        conflict=conflict_info,
+        file_hash=file_hash,
+        tx_hash=tx_hash,
     )
 
 @app.route("/logout")
