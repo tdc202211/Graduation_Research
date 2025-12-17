@@ -18,8 +18,7 @@ BOX_CLIENT_ID = os.getenv("BOX_CLIENT_ID")
 BOX_CLIENT_SECRET = os.getenv("BOX_CLIENT_SECRET")
 BOX_REDIRECT_URI = os.getenv("BOX_REDIRECT_URI")
 
-eth_client = EthereumClient()
-
+eth_client = None  # lazy init
 def store_tokens(access_token, refresh_token):
     session["access_token"] = access_token
     session["refresh_token"] = refresh_token
@@ -103,6 +102,14 @@ def upload():
         return render_template("upload.html", error="ファイルが選択されていません。")
 
     uploaded_file, conflict_info, file_hash = uploader.upload_file(file)
+
+global eth_client
+if eth_client is None:
+    try:
+        eth_client = EthereumClient()
+    except Exception as e:
+        # RPC/鍵/アドレス設定が不足している場合など
+        return render_template("upload.html", error=f"Ethereum設定エラー: {e}")
 
     # ここで EthereumClient に即送信（設計A）
     tx_hash = eth_client.store_file_record(
