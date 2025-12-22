@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from box_client import BoxUploader
+from eth_client import EthereumClient
 
 load_dotenv()
 
@@ -121,6 +122,18 @@ def upload():
         "fileName": uploaded_file.name,
         "uploadedAt": datetime.now(timezone.utc).isoformat(),
     }
+    
+    tx_hash = None
+    chain_error = None
+    try:
+        eth = EthereumClient()  # .env から ETH_RPC_URL / ETH_PRIVATE_KEY / ETH_CONTRACT_ADDRESS を読む
+        tx_hash = eth.store_file_record(
+            file_hash=payload["fileHash"],
+            box_file_id=payload["fileId"],
+            box_file_name=payload["fileName"],
+        )
+    except Exception as ex:
+        chain_error = f"{type(ex).__name__}: {ex}"
 
     # JSON保存
     payload_dir = Path(__file__).resolve().parent / "payloads"
@@ -147,6 +160,8 @@ def upload():
         saved_path=str(payload_path),
         save_error=save_error,
         conflict=conflict_info,
+        tx_hash=tx_hash,
+        chain_error=chain_error,
     )
 
 

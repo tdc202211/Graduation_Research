@@ -11,9 +11,9 @@
     <p><strong>File ID:</strong> {{ payload.fileId }}</p>
 
     {% if conflict %}
-      <p>
-        既に存在していたファイル（ID: {{ conflict.id }}）の新しいバージョンとして保存されました。
-      </p>
+    <p>
+      既に存在していたファイル（ID: {{ conflict.id }}）の新しいバージョンとして保存されました。
+    </p>
     {% endif %}
 
     <hr>
@@ -21,11 +21,20 @@
     <p><strong>ファイルの SHA-256 ハッシュ:</strong></p>
     <pre class="hash">{{ payload.fileHash }}</pre>
 
+    <hr>
+
+    <p><strong>ブロックチェーン登録結果:</strong></p>
+    {% if tx_hash %}
+    <p class="muted"><strong>tx_hash:</strong> {{ tx_hash }}</p>
+    {% else %}
+    <p class="error"><strong>Blockchain Error:</strong> {{ chain_error }}</p>
+    {% endif %}
+
     {% if saved_path %}
-      <p class="muted"><strong>Saved JSON:</strong> {{ saved_path }}</p>
+    <p class="muted"><strong>Saved JSON:</strong> {{ saved_path }}</p>
     {% endif %}
     {% if save_error %}
-      <p class="error"><strong>JSON Save Error:</strong> {{ save_error }}</p>
+    <p class="error"><strong>JSON Save Error:</strong> {{ save_error }}</p>
     {% endif %}
   </div>
 

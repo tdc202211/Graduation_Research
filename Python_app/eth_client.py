@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from typing import Optional
+from datetime import datetime
 
 from dotenv import load_dotenv
 from web3 import Web3
@@ -13,16 +14,29 @@ _MIN_ABI = [
     {
         "inputs": [
             {"internalType": "bytes32", "name": "fileHash", "type": "bytes32"},
-            {"internalType": "string", "name": "boxUrl", "type": "string"},
+            {"internalType": "string", "name": "fileId", "type": "string"},
             {"internalType": "string", "name": "fileName", "type": "string"},
         ],
-        "name": "recordFile",
+        "name": "recordOrUpdate",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function",
-    }
+    },
+    {
+        "inputs": [
+            {"internalType": "string", "name": "fileId", "type": "string"},
+        ],
+        "name": "getLatest",
+        "outputs": [
+            {"internalType": "bytes32", "name": "fileHash", "type": "bytes32"},
+            {"internalType": "string", "name": "fileName", "type": "string"},
+            {"internalType": "uint256", "name": "updatedAt", "type": "uint256"},
+            {"internalType": "bool", "name": "exists", "type": "bool"},
+        ],
+        "stateMutability": "view",
+        "type": "function",
+    },
 ]
-
 
 @dataclass(frozen=True)
 class EthConfig:
@@ -94,7 +108,7 @@ class EthereumClient:
         nonce = self._w3.eth.get_transaction_count(self._acct.address)
         chain_id = self._w3.eth.chain_id
 
-        func = self._contract.functions.recordFile(file_hash32, str(box_file_id), str(box_file_name))
+        func = self._contract.functions.recordOrUpdate(file_hash32, str(box_file_id), str(box_file_name))
 
         tx = func.build_transaction(
             {
@@ -123,7 +137,22 @@ class EthereumClient:
             tx["gasPrice"] = self._w3.eth.gas_price
 
         signed = self._acct.sign_transaction(tx)
-        tx_hash = self._w3.eth.send_raw_transaction(signed.rawTransaction)
+        tx_hash = self._w3.eth.send_raw_transaction(signed.raw_transaction)
         receipt = self._w3.eth.wait_for_transaction_receipt(tx_hash)
 
-        return receipt.transactionHash.hex()
+        txh = receipt.transactionHash.hex()
+        if not txh.startswith("0x"):
+            txh = "0x" + txh
+        return txh
+
+    def get_latest(self, box_file_id: str) -> dict:
+        file_hash, file_name, updated_at, exists = (
+            self._contract.functions.getLatest(str(box_file_id)).call()
+    )
+
+        return {
+            "fileHash": file_hash.hex(),
+            "fileName": file_name,
+            "updatedAt": datetime.fromtimestamp(updated_at).isoformat(),
+            "exists": bool(exists),
+        }

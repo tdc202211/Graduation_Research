@@ -2,30 +2,48 @@
 pragma solidity ^0.8.20;
 
 contract FileRegistry {
-    struct FileRecord {
-        bytes32 fileHash;   // SHA-256ならbytes32にぴったり
-        string boxUrl;      // 共有リンク or 何か識別子
-        string fileName;    // 任意（なくてもいい）
-        uint256 uploadedAt; // ブロック時刻
-        address uploader;   // 誰が登録したか
+    struct Latest {
+        bytes32 fileHash;
+        string fileName;
+        uint256 updatedAt;
+        bool exists;
     }
 
-    mapping(bytes32 => FileRecord) public records;
+    // fileId（string）を keccak256 して固定長キーにする
+    mapping(bytes32 => Latest) private latestByFileKey;
 
-    event FileRecorded(bytes32 indexed fileHash, string boxUrl, string fileName, address indexed uploader);
+    event FileRecordedOrUpdated(
+        bytes32 indexed fileKey,
+        string fileId,
+        bytes32 fileHash,
+        string fileName,
+        uint256 updatedAt
+    );
 
-    function recordFile(bytes32 fileHash, string calldata boxUrl, string calldata fileName) external {
-        // 二重登録を嫌うならチェック
-        require(records[fileHash].uploadedAt == 0, "already recorded");
+    function _key(string memory fileId) internal pure returns (bytes32) {
+        return keccak256(bytes(fileId));
+    }
 
-        records[fileHash] = FileRecord({
+    // ★ 上書きOK：同じ fileId なら常に最新状態に更新される
+    function recordOrUpdate(bytes32 fileHash, string calldata fileId, string calldata fileName) external {
+        bytes32 k = _key(fileId);
+        latestByFileKey[k] = Latest({
             fileHash: fileHash,
-            boxUrl: boxUrl,
             fileName: fileName,
-            uploadedAt: block.timestamp,
-            uploader: msg.sender
+            updatedAt: block.timestamp,
+            exists: true
         });
 
-        emit FileRecorded(fileHash, boxUrl, fileName, msg.sender);
+        emit FileRecordedOrUpdated(k, fileId, fileHash, fileName, block.timestamp);
+    }
+
+    // ★ 読み取り（検証用）：最新状態を返す
+    function getLatest(string calldata fileId)
+        external
+        view
+        returns (bytes32 fileHash, string memory fileName, uint256 updatedAt, bool exists)
+    {
+        Latest memory r = latestByFileKey[_key(fileId)];
+        return (r.fileHash, r.fileName, r.updatedAt, r.exists);
     }
 }
