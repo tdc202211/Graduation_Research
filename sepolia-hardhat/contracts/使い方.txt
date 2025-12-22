@@ -1,0 +1,2 @@
+データの登録：await c.recordFile(fileHash, boxId, filename)
+データの参照：await c.getFileHashCount()

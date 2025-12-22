@@ -1,68 +1,81 @@
-# box_client.py
-
 import hashlib
-from io import BytesIO
-from typing import Optional, Dict, Any
-
-from boxsdk import Client
 from boxsdk.exception import BoxAPIException
-from werkzeug.datastructures import FileStorage
 
 
 class BoxUploader:
-    """
-    Box へのファイルアップロード処理をまとめたクラス（Flask用）
-
-    - Flask の request.files['file']（FileStorage）を受け取る
-    - デフォルトではルートフォルダ（"0"）にアップロード
-    - 同名ファイルがあれば新バージョンとして更新
-    - 同時にファイル内容の SHA-256 ハッシュも計算して返す
-    """
-
-    def __init__(self, client: Client, default_folder_id: str = "0") -> None:
+    def __init__(self, client, default_folder_id="0"):
         self._client = client
-        self._default_folder_id = default_folder_id
+        self._default_folder_id = str(default_folder_id)
 
-    def upload_file(
-        self,
-        file_storage: FileStorage,
-        folder_id: Optional[str] = None,
-    ):
+    @staticmethod
+    def _sha256_bytes(data: bytes) -> str:
+        h = hashlib.sha256()
+        h.update(data)
+        return h.hexdigest()
+
+    def upload_file(self, file_storage):
         """
-        Flask の FileStorage を受け取って Box にアップロードし、
-        (uploaded_file, conflict_info, file_hash) を返す。
+        Args:
+            file_storage: Flaskの request.files["file"] の FileStorage
 
-        conflict_info:
-          - None              … 新規アップロード
-          - dict(conflicts..) … 同名ファイルがすでにあり、新バージョンとして保存した場合
-
-        file_hash:
-          - アップロードしたファイル内容の SHA-256 ハッシュ（16進文字列）
+        Returns:
+            (uploaded_file, conflict_info, file_hash)
+            - uploaded_file: BoxのFileオブジェクト（id/nameが確実に取れるようget()済み）
+            - conflict_info: 409時のconflict情報（なければNone）
+            - file_hash: アップロード内容のSHA-256(hex)
         """
-        target_folder_id = folder_id or self._default_folder_id
+        filename = file_storage.filename
 
-        # 中身を一度メモリに載せておく（409時の再アップロード＆ハッシュ計算に使う）
-        content = file_storage.read()
-        file_hash = hashlib.sha256(content).hexdigest()
-        stream = BytesIO(content)
+        # FileStorageはstreamを持つ。内容をbytesとして読み切ってhash計算し、
+        # そのbytesでBoxへアップロードする（確実に同じ内容をhashとアップロードに使う）
+        data = file_storage.read()
+        file_hash = self._sha256_bytes(data)
 
-        folder = self._client.folder(target_folder_id)
-        conflict_info: Optional[Dict[str, Any]] = None
+        # BoxSDKはストリームが必要なので、bytesをmemoryview/bytesで渡せる stream を作る
+        # ここはシンプルに bytes を使ってアップロード（boxsdkが内部で扱う）
+        # ただし update_contents_with_stream は stream を要求するので io.BytesIO を使う
+        import io
+        stream = io.BytesIO(data)
+
+        conflict_info = None
 
         try:
-            # 新規アップロードを試す
-            uploaded_file = folder.upload_stream(stream, file_storage.filename)
+            # 新規アップロード
+            uploaded = (
+                self._client.folder(self._default_folder_id)
+                .upload_stream(stream, filename)
+            )
+            # name等が薄いケースがあるので確実に取得
+            uploaded_file = self._client.file(uploaded.id).get()
+            return uploaded_file, conflict_info, file_hash
+
         except BoxAPIException as e:
-            # 同名ファイルが存在する場合
-            if e.status == 409 and e.code == "item_name_in_use":
-                conflict_info = e.context_info.get("conflicts")
+            # 同名衝突 → 上書き（新バージョン）
+            if e.status == 409 and getattr(e, "code", None) == "item_name_in_use":
+                conflict_info = None
+
+                # boxsdkの例外に含まれる conflict 情報を拾う
+                ctx = getattr(e, "context_info", None)
+                if isinstance(ctx, dict):
+                    conflicts = ctx.get("conflicts")
+                    if isinstance(conflicts, list) and conflicts:
+                        conflict_info = conflicts[0]
+                    elif isinstance(conflicts, dict):
+                        conflict_info = conflicts
+
+                if not conflict_info or "id" not in conflict_info:
+                    # 409だけどIDが取れないのは想定外なので投げる
+                    raise
+
                 existing_file_id = conflict_info["id"]
 
-                # ストリームを先頭に戻してから、新バージョンとしてアップロード
+                # 先頭に戻して新バージョンをアップロード
                 stream.seek(0)
-                uploaded_file = self._client.file(existing_file_id).update_contents_with_stream(stream)
-            else:
-                # それ以外は一旦そのまま投げる
-                raise
+                self._client.file(existing_file_id).update_contents_with_stream(stream)
 
-        return uploaded_file, conflict_info, file_hash
+                # update系は戻り値が薄いことがあるので get() で確実に
+                uploaded_file = self._client.file(existing_file_id).get()
+                return uploaded_file, conflict_info, file_hash
+
+            # それ以外は再raise
+            raise

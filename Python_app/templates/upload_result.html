@@ -1,25 +1,37 @@
 {% extends "base.html" %}
 
+{% block title %}Upload Result{% endblock %}
+
 {% block content %}
-<h1>アップロード完了</h1>
-<p><strong>ファイル名:</strong> {{ file_name }}</p>
-<p><strong>File ID:</strong> {{ file_id }}</p>
+<div class="card">
+  <h1>アップロード完了</h1>
 
-{% if conflict %}
-<p>既に存在していたファイル（ID: {{ conflict.id }}）の <strong>新しいバージョン</strong>として保存されました。</p>
-{% else %}
-<p>新しいファイルとしてアップロードされました。</p>
-{% endif %}
+  <div class="result">
+    <p><strong>ファイル名:</strong> {{ payload.fileName }}</p>
+    <p><strong>File ID:</strong> {{ payload.fileId }}</p>
 
-<hr>
+    {% if conflict %}
+      <p>
+        既に存在していたファイル（ID: {{ conflict.id }}）の新しいバージョンとして保存されました。
+      </p>
+    {% endif %}
 
-<p><strong>ファイルの SHA-256 ハッシュ:</strong></p>
-<code style="word-wrap: break-word; display:block; padding:8px; background:#f5f5f5; border-radius:6px;">
-  {{ file_hash }}
-</code>
+    <hr>
 
-<p><strong>Ethereum トランザクション:</strong> {{ tx_hash }}</p>
+    <p><strong>ファイルの SHA-256 ハッシュ:</strong></p>
+    <pre class="hash">{{ payload.fileHash }}</pre>
 
-<a href="{{ url_for('upload') }}" class="btn">別のファイルをアップロード</a>
-<a href="{{ url_for('index') }}" class="btn btn-secondary">Home に戻る</a>
+    {% if saved_path %}
+      <p class="muted"><strong>Saved JSON:</strong> {{ saved_path }}</p>
+    {% endif %}
+    {% if save_error %}
+      <p class="error"><strong>JSON Save Error:</strong> {{ save_error }}</p>
+    {% endif %}
+  </div>
+
+  <div class="actions">
+    <a class="btn primary" href="{{ url_for('upload') }}">別のファイルをアップロード</a>
+    <a class="btn" href="{{ url_for('index') }}">Home に戻る</a>
+  </div>
+</div>
 {% endblock %}
