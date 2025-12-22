@@ -168,40 +168,32 @@ def upload():
     )
 
 
-def load_payload_history():
-    payload_dir = Path(__file__).resolve().parent / "payloads"
-    if not payload_dir.exists():
-        return []
-
-    records = []
-    for path in sorted(payload_dir.glob("*.json")):
-        if path.name == "latest.json":
-            continue
-        try:
-            with path.open("r", encoding="utf-8") as f:
-                data = json.load(f)
-            data["_file"] = path.name  # track source file
-            records.append(data)
-        except Exception:
-            continue
-
-    records.sort(key=lambda x: x.get("uploadedAt", ""), reverse=True)
-    # Deduplicate by fileId, keep the newest first
-    seen = set()
-    unique = []
-    for item in records:
-        fid = item.get("fileId")
-        if fid in seen:
-            continue
-        seen.add(fid)
-        unique.append(item)
-    return unique
-
-
 @app.route("/records")
 def records():
-    history = load_payload_history()
-    return render_template("records.html", records=history)
+    history = []
+    chain_error = None
+    try:
+        eth = EthereumClient()
+        history = eth.fetch_all_records()
+    except Exception as ex:
+        chain_error = f"{type(ex).__name__}: {ex}"
+
+    return render_template("records.html", records=history, chain_error=chain_error)
+
+
+@app.route("/records/<file_id>")
+def record_detail(file_id):
+    chain_error = None
+    record = None
+    try:
+        eth = EthereumClient()
+        res = eth.get_latest(file_id)
+        if res.get("exists"):
+            record = {"fileId": file_id, **res}
+    except Exception as ex:
+        chain_error = f"{type(ex).__name__}: {ex}"
+
+    return render_template("record_detail.html", record=record, file_id=file_id, chain_error=chain_error)
 
 
 @app.route("/payload/latest")

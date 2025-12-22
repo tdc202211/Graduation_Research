@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from dotenv import load_dotenv
 from web3 import Web3
@@ -21,6 +21,18 @@ _MIN_ABI = [
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function",
+    },
+    {
+        "anonymous": False,
+        "inputs": [
+            {"indexed": True, "internalType": "bytes32", "name": "fileKey", "type": "bytes32"},
+            {"indexed": False, "internalType": "string", "name": "fileId", "type": "string"},
+            {"indexed": False, "internalType": "bytes32", "name": "fileHash", "type": "bytes32"},
+            {"indexed": False, "internalType": "string", "name": "fileName", "type": "string"},
+            {"indexed": False, "internalType": "uint256", "name": "updatedAt", "type": "uint256"},
+        ],
+        "name": "FileRecordedOrUpdated",
+        "type": "event",
     },
     {
         "inputs": [
@@ -120,7 +132,9 @@ class EthereumClient:
 
         # ガス・手数料はネットワークに合わせて自動推定（失敗時は例外）
         if "gas" not in tx:
-            tx["gas"] = self._w3.eth.estimate_gas(tx)
+            estimated = self._w3.eth.estimate_gas(tx)
+            # Hardhat/Sepolia で初回書き込み時に余裕を持たせないと out-of-gas になることがあるためバッファを積む
+            tx["gas"] = int(estimated * 2.0)
 
         # EIP-1559 料金が使える環境ならそれを使う（無理なら legacy にフォールバック）
         try:
@@ -148,11 +162,53 @@ class EthereumClient:
     def get_latest(self, box_file_id: str) -> dict:
         file_hash, file_name, updated_at, exists = (
             self._contract.functions.getLatest(str(box_file_id)).call()
-    )
+        )
 
+        jst = timezone(timedelta(hours=9))
         return {
             "fileHash": file_hash.hex(),
             "fileName": file_name,
-            "updatedAt": datetime.fromtimestamp(updated_at).isoformat(),
+            "updatedAt": datetime.fromtimestamp(updated_at, tz=jst).isoformat(),
             "exists": bool(exists),
         }
+
+    def fetch_all_records(self, from_block: int | None = None, to_block="latest") -> list[dict]:
+        """
+        FileRecordedOrUpdated イベントを走査して最新状態を集約する。
+        同じ fileId は updatedAt が新しいものを優先。
+        """
+        start_block = 0 if from_block is None else from_block
+        try:
+            logs = self._contract.events.FileRecordedOrUpdated().get_logs(
+                from_block=start_block, to_block=to_block
+            )
+        except Exception as ex:
+            raise RuntimeError(f"failed to fetch logs: {ex}")
+
+        jst = timezone(timedelta(hours=9))
+        latest_by_id = {}
+        for log in logs:
+            args = log["args"]
+            file_id = args.get("fileId")
+            if not file_id:
+                continue
+            updated_at = int(args.get("updatedAt", 0))
+            existing = latest_by_id.get(file_id)
+            if existing and existing["updatedAt_ts"] >= updated_at:
+                continue
+
+            latest_by_id[file_id] = {
+                "fileId": file_id,
+                "fileName": args.get("fileName"),
+                "fileHash": Web3.to_hex(args.get("fileHash")),
+                "updatedAt": datetime.fromtimestamp(updated_at, tz=jst).isoformat(),
+                "updatedAt_ts": updated_at,
+                "blockNumber": log.get("blockNumber"),
+                "txHash": log.get("transactionHash").hex(),
+            }
+
+        records = list(latest_by_id.values())
+        records.sort(key=lambda x: x["updatedAt_ts"], reverse=True)
+        for r in records:
+            r.pop("updatedAt_ts", None)
+        return records

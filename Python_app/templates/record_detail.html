@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>ファイル詳細</h1>
+<p>File ID: <strong>{{ file_id }}</strong></p>
+
+{% if chain_error %}
+<p class="error">取得に失敗しました: {{ chain_error }}</p>
+{% endif %}
+
+{% if record %}
+<ul>
+    <li>ファイル名: {{ record.fileName or "-" }}</li>
+    <li>ファイルハッシュ: <span style="font-family: monospace;">{{ record.fileHash or "-" }}</span></li>
+    <li>最終更新 (JST): {{ record.updatedAt or "-" }}</li>
+</ul>
+{% else %}
+<p>該当するレコードが見つかりませんでした。</p>
+{% endif %}
+
+<p><a href="{{ url_for('records') }}" class="btn btn-secondary">一覧へ戻る</a></p>
+{% endblock %}

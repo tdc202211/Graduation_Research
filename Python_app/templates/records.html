@@ -2,7 +2,11 @@
 
 {% block content %}
 <h1>アップロード履歴</h1>
-<p>保存済みのファイル情報一覧です。</p>
+<p>ブロックチェーン上の FileRegistry から取得した最新情報一覧です。</p>
+
+{% if chain_error %}
+<p class="error">取得に失敗しました: {{ chain_error }}</p>
+{% endif %}
 
 {% if records %}
 <div style="overflow-x:auto;">
@@ -12,16 +16,20 @@
                 <th style="padding:8px;">アップロード日時</th>
                 <th style="padding:8px;">ファイル名</th>
                 <th style="padding:8px;">File ID</th>
-                <th style="padding:8px;">ファイルハッシュ</th>
             </tr>
         </thead>
         <tbody>
             {% for item in records %}
             <tr style="border-bottom: 1px solid #f0f0f0;">
-                <td style="padding:8px; white-space: nowrap;">{{ item.uploadedAt or "-" }}</td>
+                <td style="padding:8px; white-space: nowrap;">{{ item.updatedAt or item.uploadedAt or "-" }}</td>
                 <td style="padding:8px;">{{ item.fileName or "-" }}</td>
-                <td style="padding:8px; font-family: monospace;">{{ item.fileId or "-" }}</td>
-                <td style="padding:8px; font-family: monospace;">{{ item.fileHash or "-" }}</td>
+                <td style="padding:8px; font-family: monospace;">
+                    {% if item.fileId %}
+                    <a href="{{ url_for('record_detail', file_id=item.fileId) }}">{{ item.fileId }}</a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
