@@ -7,8 +7,10 @@
 {% if logged_in %}
 <p>すでに Box にログイン済みです。</p>
 <a href="{{ url_for('upload') }}" class="btn">ファイルをアップロードする</a>
+<a href="{{ url_for('records') }}" class="btn btn-secondary" style="margin-left: 8px;">アップロード履歴を表示</a>
 {% else %}
 <p>まず Box にログインしてください。</p>
 <a href="{{ url_for('login') }}" class="btn">Box にログイン</a>
+<a href="{{ url_for('records') }}" class="btn btn-secondary" style="margin-left: 8px;">アップロード履歴を表示</a>
 {% endif %}
 {% endblock %}

@@ -29,7 +29,7 @@
         }
 
         .container {
-            max-width: 800px;
+            width: 80%;
             margin: 32px auto;
             background: #fff;
             padding: 24px;
@@ -76,6 +76,7 @@
             <a href="{{ url_for('index') }}">Home</a>
             <a href="{{ url_for('me') }}">Profile</a>
             <a href="{{ url_for('upload') }}">Upload</a>
+            <a href="{{ url_for('records') }}">Records</a>
             {% if session.get('access_token') %}
             <a href="{{ url_for('logout') }}">Logout</a>
             {% else %}

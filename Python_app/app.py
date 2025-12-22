@@ -3,7 +3,7 @@ from boxsdk import OAuth2, Client
 from dotenv import load_dotenv
 import os
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -116,11 +116,13 @@ def upload():
     # Boxへアップロード（同名なら上書き＝新バージョン）
     uploaded_file, conflict_info, file_hash = uploader.upload_file(file)
 
+    jst = timezone(timedelta(hours=9))
     payload = {
         "fileHash": file_hash,
         "fileId": str(uploaded_file.id),
         "fileName": uploaded_file.name,
-        "uploadedAt": datetime.now(timezone.utc).isoformat(),
+        "uploadedAt": datetime.now(jst).isoformat(),
+        "txHash": None,
     }
     
     tx_hash = None
@@ -132,6 +134,7 @@ def upload():
             box_file_id=payload["fileId"],
             box_file_name=payload["fileName"],
         )
+        payload["txHash"] = tx_hash
     except Exception as ex:
         chain_error = f"{type(ex).__name__}: {ex}"
 
@@ -163,6 +166,42 @@ def upload():
         tx_hash=tx_hash,
         chain_error=chain_error,
     )
+
+
+def load_payload_history():
+    payload_dir = Path(__file__).resolve().parent / "payloads"
+    if not payload_dir.exists():
+        return []
+
+    records = []
+    for path in sorted(payload_dir.glob("*.json")):
+        if path.name == "latest.json":
+            continue
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            data["_file"] = path.name  # track source file
+            records.append(data)
+        except Exception:
+            continue
+
+    records.sort(key=lambda x: x.get("uploadedAt", ""), reverse=True)
+    # Deduplicate by fileId, keep the newest first
+    seen = set()
+    unique = []
+    for item in records:
+        fid = item.get("fileId")
+        if fid in seen:
+            continue
+        seen.add(fid)
+        unique.append(item)
+    return unique
+
+
+@app.route("/records")
+def records():
+    history = load_payload_history()
+    return render_template("records.html", records=history)
 
 
 @app.route("/payload/latest")
