@@ -6,6 +6,59 @@
 <div class="card">
   <h1>アップロード完了</h1>
 
+  <div class="flow-section">
+    <h2 class="flow-title">アップロードの流れ</h2>
+    <div class="flow-layout" data-flow-layout>
+      <div class="flow-left">
+        <div class="flow-board">
+          <div class="flow-column">
+            <div class="flow-column-header flow-node" style="--delay: 0s;"
+              data-title="ローカル"
+              data-beginner="PC内でファイルを読み取り、送信の準備をする段階です。"
+              data-advanced="ローカル環境でハッシュ計算や署名前処理を行います。">ローカル</div>
+            <div class="flow-step flow-node" style="--delay: 2s;"
+              data-title="ファイルから情報を抽出"
+              data-beginner="配送物を倉庫からピッキングする"
+              data-advanced="{&#10;  &quot;fileHash&quot;: &quot;e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855&quot;,&#10;  &quot;fileId&quot;: &quot;2079866414120&quot;,&#10;  &quot;fileName&quot;: &quot;hello.txt&quot;,&#10;  &quot;uploadedAt&quot;: &quot;2025-12-22T16:47:25.643076+09:00&quot;,&#10;  &quot;txHash&quot;: &quot;0xe5aa92474f01bbb6299738c9a2bd7fd50e152dff8c7b7516fa9611949ed9a41f&quot;&#10;}">ファイルから情報を抽出</div>
+            <div class="flow-step flow-node" style="--delay: 4s;"
+              data-title="データをエンコード"
+              data-beginner="配送物を送るために包装紙で包む"
+              data-advanced="data={&#10;0x2f8609b7e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000d3230373938363634313431323000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000968656c6c6f2e7478740000000000000000000000000000000000000000000000}">データをエンコード</div>
+            <div class="flow-step flow-node" style="--delay: 6s;"
+              data-title="トランザクションの作成"
+              data-beginner="配送物を箱に詰め、送り先などの情報を記載する"
+              data-advanced="{&#10;  &quot;hash&quot;: null,&#10;  &quot;type&quot;: &quot;0x2&quot;,&#10;  &quot;nonce&quot;: &quot;0x1&quot;,&#10;  &quot;blockHash&quot;: null,&#10;  &quot;blockNumber&quot;: null,&#10;  &quot;transactionIndex&quot;: null,&#10;  &quot;from&quot;: &quot;0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266&quot;,&#10;  &quot;to&quot;: &quot;0x5FbDB2315678afecb367f032d93F642f64180aa3&quot;,&#10;  &quot;value&quot;: &quot;0x0&quot;,&#10;  &quot;gas&quot;: &quot;0x493e0&quot;,&#10;  &quot;maxFeePerGas&quot;: &quot;0xc1b71080&quot;,&#10;  &quot;maxPriorityFeePerGas&quot;: &quot;0x59682f00&quot;,&#10;  &quot;input&quot;: &quot;0x2f8609b7e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000d3230373938363634313431323000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000968656c6c6f2e7478740000000000000000000000000000000000000000000000&quot;,&#10;  &quot;accessList&quot;: [],&#10;  &quot;chainId&quot;: &quot;0x7a69&quot;&#10;}">トランザクションの作成</div>
+            <div class="flow-step flow-node" style="--delay: 8s;"
+              data-title="トランザクションを署名"
+              data-beginner="送り主の名前を記載する"
+              data-advanced="{&#10;  &quot;hash&quot;: &quot;eb327ff1d3d15a583c980b3ac9f3861f477a8146f21b6e3e935dc1403eb4215a&quot;,&#10;  &quot;type&quot;: &quot;0x2&quot;,&#10;  &quot;nonce&quot;: &quot;0x1&quot;,&#10;  &quot;blockHash&quot;: null,&#10;  &quot;blockNumber&quot;: null,&#10;  &quot;transactionIndex&quot;: null,&#10;  &quot;from&quot;: &quot;0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266&quot;,&#10;  &quot;to&quot;: &quot;0x5FbDB2315678afecb367f032d93F642f64180aa3&quot;,&#10;  &quot;value&quot;: &quot;0x0&quot;,&#10;  &quot;gas&quot;: &quot;0x493e0&quot;,&#10;  &quot;maxFeePerGas&quot;: &quot;0xc1b71080&quot;,&#10;  &quot;maxPriorityFeePerGas&quot;: &quot;0x59682f00&quot;,&#10;  &quot;input&quot;: &quot;0x2f8609b7e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000d3230373938363634313431323000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000968656c6c6f2e7478740000000000000000000000000000000000000000000000&quot;,&#10;  &quot;accessList&quot;: [],&#10;  &quot;chainId&quot;: &quot;0x7a69&quot;,&#10;  &quot;v&quot;: &quot;0x0&quot;,&#10;  &quot;r&quot;: &quot;0x32e42a72060b54d4d9e0fac03a698c5fc8ed1877b479f0135863f5d90864fa07&quot;,&#10;  &quot;s&quot;: &quot;0x72e1012ad3214c4ef802c7e55bb990bc888f6a560a411e3c2af5f9123d929f1e&quot;&#10;}">トランザクションを署名</div>
+            <div class="flow-step flow-node" style="--delay: 10s;"
+              data-title="トランザクションを送信"
+              data-beginner="受取人に配達完了"
+              data-advanced="なし">トランザクションを送信</div>
+            <div class="flow-column-header flow-node" style="--delay: 12s;"
+              data-title="ブロックチェーン"
+              data-beginner="ここからはネットワーク側の処理です。"
+              data-advanced="ブロックに取り込まれて確定していきます。">ブロックチェーン</div>
+            <div class="flow-step flow-node flow-node-last" style="--delay: 14s;"
+              data-title="データをストレージに保管"
+              data-beginner="包装を解いて家に設置"
+              data-advanced="{&#10;  &quot;contract&quot;: &quot;0x5FbDB2315678afecb367f032d93F642f64180aa3&quot;,&#10;  &quot;rpc&quot;: &quot;http://127.0.0.1:8545&quot;,&#10;  &quot;mapping_slot_index&quot;: 0,&#10;  &quot;key(fileId)&quot;: &quot;2079866414120&quot;,&#10;  &quot;base_slot&quot;: &quot;0xf46a09a3540b27f1477139b41b47450af9b8560283f4a6f3987d97df29ea3e90&quot;,&#10;  &quot;schema&quot;: &quot;bytes32,string,uint256,bool&quot;,&#10;  &quot;raw_slots&quot;: [&#10;    {&#10;      &quot;slot&quot;: &quot;0xf46a09a3540b27f1477139b41b47450af9b8560283f4a6f3987d97df29ea3e90&quot;,&#10;      &quot;value&quot;: &quot;0x0000000000000000000000000000000000000000000000000000000000000000&quot;&#10;    },&#10;    {&#10;      &quot;slot&quot;: &quot;0xf46a09a3540b27f1477139b41b47450af9b8560283f4a6f3987d97df29ea3e91&quot;,&#10;      &quot;value&quot;: &quot;0x0000000000000000000000000000000000000000000000000000000000000000&quot;&#10;    },&#10;    {&#10;      &quot;slot&quot;: &quot;0xf46a09a3540b27f1477139b41b47450af9b8560283f4a6f3987d97df29ea3e92&quot;,&#10;      &quot;value&quot;: &quot;0x0000000000000000000000000000000000000000000000000000000000000000&quot;&#10;    },&#10;    {&#10;      &quot;slot&quot;: &quot;0xf46a09a3540b27f1477139b41b47450af9b8560283f4a6f3987d97df29ea3e93&quot;,&#10;      &quot;value&quot;: &quot;0x0000000000000000000000000000000000000000000000000000000000000000&quot;&#10;    },&#10;    {&#10;      &quot;slot&quot;: &quot;0xf46a09a3540b27f1477139b41b47450af9b8560283f4a6f3987d97df29ea3e94&quot;,&#10;      &quot;value&quot;: &quot;0x0000000000000000000000000000000000000000000000000000000000000000&quot;&#10;    },&#10;    {&#10;      &quot;slot&quot;: &quot;0xf46a09a3540b27f1477139b41b47450af9b8560283f4a6f3987d97df29ea3e95&quot;,&#10;      &quot;value&quot;: &quot;0x0000000000000000000000000000000000000000000000000000000000000000&quot;&#10;    }&#10;  ],&#10;  &quot;decoded_by_schema&quot;: {&#10;    &quot;field0_bytes32&quot;: &quot;0x0000000000000000000000000000000000000000000000000000000000000000&quot;,&#10;    &quot;field1_string&quot;: &quot;&quot;,&#10;    &quot;field2_uint256&quot;: 0,&#10;    &quot;field3_bool&quot;: false&#10;  }&#10;}">データをストレージに保管</div>
+          </div>
+        </div>
+      </div>
+      <div class="flow-detail">
+        <div class="flow-detail-card">
+          <div class="flow-detail-title">要素の詳細な説明</div>
+          <div class="flow-detail-label">初心者向けの説明</div>
+          <div class="flow-detail-box" data-flow-beginner></div>
+          <div class="flow-detail-label">上級者向けの説明</div>
+          <pre class="flow-detail-box flow-detail-code" data-flow-advanced></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="result">
     <p><strong>ファイル名:</strong> {{ payload.fileName }}</p>
     <p><strong>File ID:</strong> {{ payload.fileId }}</p>
@@ -43,4 +96,43 @@
     <a class="btn" href="{{ url_for('index') }}">Home に戻る</a>
   </div>
 </div>
+
+<script>
+  (function () {
+    const layout = document.querySelector("[data-flow-layout]");
+    if (!layout) return;
+
+    const steps = Array.from(layout.querySelectorAll(".flow-step"));
+    const beginnerBox = layout.querySelector("[data-flow-beginner]");
+    const advancedBox = layout.querySelector("[data-flow-advanced]");
+
+    const setActive = (step) => {
+      if (!layout.classList.contains("is-split")) {
+        return;
+      }
+      steps.forEach((s) => s.classList.remove("is-active"));
+      step.classList.add("is-active");
+      if (beginnerBox) beginnerBox.textContent = step.dataset.beginner || "";
+      if (advancedBox) advancedBox.textContent = step.dataset.advanced || "";
+    };
+
+    if (steps.length > 0) {
+      steps.forEach((step) => step.addEventListener("click", () => setActive(step)));
+    }
+
+    let maxDelay = 0;
+    layout.querySelectorAll(".flow-node").forEach((node) => {
+      const delay = parseFloat(getComputedStyle(node).getPropertyValue("--delay")) || 0;
+      maxDelay = Math.max(maxDelay, delay);
+    });
+
+    const totalMs = (maxDelay + 0.6) * 1000;
+    setTimeout(() => {
+      layout.classList.add("is-split");
+      if (steps.length > 0) {
+        setActive(steps[0]);
+      }
+    }, totalMs);
+  })();
+</script>
 {% endblock %}

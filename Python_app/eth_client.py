@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass
 from typing import Optional
 from datetime import datetime, timezone, timedelta
@@ -50,6 +51,8 @@ _MIN_ABI = [
     },
 ]
 
+_TX_LOCK = threading.Lock()
+
 @dataclass(frozen=True)
 class EthConfig:
     rpc_url: str
@@ -97,6 +100,18 @@ class EthereumClient:
             abi=_MIN_ABI,
         )
 
+        self._tx_lock = _TX_LOCK
+
+    @staticmethod
+    def _looks_like_out_of_gas_error(exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return "out of gas" in msg or "intrinsic gas too low" in msg
+
+    @staticmethod
+    def _looks_like_nonce_too_low(exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return "nonce too low" in msg
+
     @staticmethod
     def _sha256_hex_to_bytes32(file_hash_hex: str) -> bytes:
         h = (file_hash_hex or "").lower().replace("0x", "").strip()
@@ -116,43 +131,63 @@ class EthereumClient:
         """
         file_hash32 = self._sha256_hex_to_bytes32(file_hash)
 
-        # build tx
-        nonce = self._w3.eth.get_transaction_count(self._acct.address)
-        chain_id = self._w3.eth.chain_id
+        with self._tx_lock:
+            # build tx
+            nonce = self._w3.eth.get_transaction_count(self._acct.address, "pending")
+            chain_id = self._w3.eth.chain_id
 
-        func = self._contract.functions.recordOrUpdate(file_hash32, str(box_file_id), str(box_file_name))
+            func = self._contract.functions.recordOrUpdate(file_hash32, str(box_file_id), str(box_file_name))
 
-        tx = func.build_transaction(
-            {
-                "from": self._acct.address,
-                "nonce": nonce,
-                "chainId": chain_id,
-            }
-        )
+            tx = func.build_transaction(
+                {
+                    "from": self._acct.address,
+                    "nonce": nonce,
+                    "chainId": chain_id,
+                }
+            )
 
-        # ガス・手数料はネットワークに合わせて自動推定（失敗時は例外）
-        if "gas" not in tx:
-            estimated = self._w3.eth.estimate_gas(tx)
-            # Hardhat/Sepolia で初回書き込み時に余裕を持たせないと out-of-gas になることがあるためバッファを積む
-            tx["gas"] = int(estimated * 2.0)
+            # ガスは推定し、必要なら余裕を持たせる（環境変数で上書き可）
+            if "gas" not in tx:
+                gas_multiplier = float(os.getenv("ETH_GAS_MULTIPLIER", "3.0"))
+                gas_limit_min = int(os.getenv("ETH_GAS_LIMIT_MIN", "800000"))
+                gas_buffer = int(os.getenv("ETH_GAS_BUFFER", "200000"))
+                try:
+                    estimated = self._w3.eth.estimate_gas(tx)
+                    tx["gas"] = max(int(estimated * gas_multiplier), estimated + gas_buffer, gas_limit_min)
+                except Exception:
+                    tx["gas"] = gas_limit_min
 
-        # EIP-1559 料金が使える環境ならそれを使う（無理なら legacy にフォールバック）
-        try:
-            latest = self._w3.eth.get_block("latest")
-            base_fee = latest.get("baseFeePerGas")
-            if base_fee is not None:
-                # 雑に「baseFee*2 + priority」を採用（研究用の安全側設定）
-                priority = self._w3.to_wei("1.5", "gwei")
-                tx["maxPriorityFeePerGas"] = priority
-                tx["maxFeePerGas"] = int(base_fee * 2 + priority)
-            else:
+            # EIP-1559 料金が使える環境ならそれを使う（無理なら legacy にフォールバック）
+            try:
+                latest = self._w3.eth.get_block("latest")
+                base_fee = latest.get("baseFeePerGas")
+                if base_fee is not None:
+                    # 雑に「baseFee*2 + priority」を採用（研究用の安全側設定）
+                    priority = self._w3.to_wei("1.5", "gwei")
+                    tx["maxPriorityFeePerGas"] = priority
+                    tx["maxFeePerGas"] = int(base_fee * 2 + priority)
+                else:
+                    tx["gasPrice"] = self._w3.eth.gas_price
+            except Exception:
                 tx["gasPrice"] = self._w3.eth.gas_price
-        except Exception:
-            tx["gasPrice"] = self._w3.eth.gas_price
 
-        signed = self._acct.sign_transaction(tx)
-        tx_hash = self._w3.eth.send_raw_transaction(signed.raw_transaction)
-        receipt = self._w3.eth.wait_for_transaction_receipt(tx_hash)
+            attempts = 0
+            while True:
+                attempts += 1
+                signed = self._acct.sign_transaction(tx)
+                try:
+                    tx_hash = self._w3.eth.send_raw_transaction(signed.raw_transaction)
+                    break
+                except Exception as ex:
+                    if self._looks_like_nonce_too_low(ex) and attempts < 3:
+                        tx["nonce"] = self._w3.eth.get_transaction_count(self._acct.address, "pending")
+                        continue
+                    if self._looks_like_out_of_gas_error(ex) and attempts < 3:
+                        tx["gas"] = int(tx["gas"] * 1.5)
+                        continue
+                    raise
+
+            receipt = self._w3.eth.wait_for_transaction_receipt(tx_hash)
 
         txh = receipt.transactionHash.hex()
         if not txh.startswith("0x"):

@@ -178,7 +178,13 @@ def records():
     except Exception as ex:
         chain_error = f"{type(ex).__name__}: {ex}"
 
-    return render_template("records.html", records=history, chain_error=chain_error)
+    contract_address = os.getenv("ETH_CONTRACT_ADDRESS")
+    return render_template(
+        "records.html",
+        records=history,
+        chain_error=chain_error,
+        contract_address=contract_address,
+    )
 
 
 @app.route("/records/<file_id>")

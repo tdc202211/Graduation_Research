@@ -1,0 +1,221 @@
+# tx_preview_presign.py
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+from web3 import Web3
+
+# ABIを.envで指定しない場合の最低限（合わないなら ETH_ABI_PATH / ETH_FUNCTION_NAME を設定）
+FALLBACK_MIN_ABI = [
+    {
+        "inputs": [
+            {"internalType": "bytes32", "name": "fileHash", "type": "bytes32"},
+            {"internalType": "string", "name": "boxUrl", "type": "string"},
+            {"internalType": "string", "name": "fileName", "type": "string"},
+        ],
+        "name": "recordFile",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function",
+    }
+]
+
+PREFERRED_ORDER = [
+    "hash",
+    "type",
+    "nonce",
+    "blockHash",
+    "blockNumber",
+    "transactionIndex",
+    "from",
+    "to",
+    "value",
+    "gas",
+    "gasPrice",
+    "maxFeePerGas",
+    "maxPriorityFeePerGas",
+    "input",
+    "accessList",
+    "chainId",
+    "v",
+    "r",
+    "s",
+]
+
+def q(n: int | None) -> str | None:
+    if n is None:
+        return None
+    if n < 0:
+        raise ValueError("quantity must be non-negative")
+    return hex(n)
+
+def h32(b: bytes | bytearray) -> str:
+    return "0x" + bytes(b).hex()
+
+def load_abi_from_env() -> list:
+    abi_path = os.getenv("ETH_ABI_PATH", "").strip()
+    if not abi_path:
+        return FALLBACK_MIN_ABI
+    obj = json.loads(Path(abi_path).read_text(encoding="utf-8"))
+    return obj["abi"] if isinstance(obj, dict) and "abi" in obj else obj
+
+def sha256_hex_to_bytes32(h: str) -> bytes:
+    s = (h or "").lower().replace("0x", "").strip()
+    if len(s) != 64:
+        raise ValueError(f"fileHash must be 64 hex chars. got len={len(s)}")
+    return bytes.fromhex(s)
+
+def pick_function_abi(abi: list, fn_name: str) -> dict:
+    cands = [x for x in abi if x.get("type") == "function" and x.get("name") == fn_name]
+    if not cands:
+        raise RuntimeError(f"Function '{fn_name}' not found in ABI. Check ETH_FUNCTION_NAME / ETH_ABI_PATH.")
+    return cands[0]
+
+def build_args_from_payload(fn_abi: dict, payload: dict) -> list:
+    file_hash32 = sha256_hex_to_bytes32(payload["fileHash"])
+    file_id = str(payload.get("fileId") or payload.get("boxFileId") or payload.get("boxUrl") or "")
+    if not file_id:
+        raise KeyError("payload must include fileId (or boxFileId/boxUrl)")
+    file_name = str(payload["fileName"])
+
+    args = []
+    for inp in fn_abi.get("inputs", []):
+        t = inp.get("type")
+        n = (inp.get("name") or "").lower()
+
+        if t == "bytes32":
+            args.append(file_hash32)
+        elif t == "string":
+            if "name" in n:
+                args.append(file_name)
+            elif "id" in n or "url" in n or "box" in n:
+                args.append(file_id)
+            else:
+                args.append(file_id if file_id not in args else file_name)
+        elif t.startswith("uint"):
+            args.append(int(file_id))
+        else:
+            raise RuntimeError(f"Unsupported input type in ABI: {t} ({inp})")
+    return args
+
+def supports_eip1559(w3: Web3) -> bool:
+    try:
+        latest = w3.eth.get_block("latest")
+        return latest.get("baseFeePerGas") is not None
+    except Exception:
+        return False
+
+def reorder(d: dict) -> dict:
+    out = {}
+    for k in PREFERRED_ORDER:
+        if k in d:
+            out[k] = d[k]
+    for k in sorted(d.keys()):
+        if k not in out:
+            out[k] = d[k]
+    return out
+
+def main() -> None:
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("payload", help="payload json path")
+    ap.add_argument("--fn", default=None, help="override function name")
+    ap.add_argument("--gas", type=int, default=None, help="override gas (no estimate)")
+    ap.add_argument("--no-estimate", action="store_true", help="skip estimate_gas")
+    ap.add_argument("--priority-gwei", type=float, default=1.5, help="EIP-1559 priority fee (gwei)")
+    args = ap.parse_args()
+
+    load_dotenv()
+
+    rpc_url = os.getenv("ETH_RPC_URL", "").strip()
+    pk = os.getenv("ETH_PRIVATE_KEY", "").strip()
+    contract_addr = os.getenv("ETH_CONTRACT_ADDRESS", "").strip()
+    if not rpc_url or not pk or not contract_addr:
+        raise RuntimeError("Need ETH_RPC_URL / ETH_PRIVATE_KEY / ETH_CONTRACT_ADDRESS in .env")
+
+    fn_name = (args.fn or os.getenv("ETH_FUNCTION_NAME", "recordFile")).strip()
+
+    payload = json.loads(Path(args.payload).read_text(encoding="utf-8"))
+
+    w3 = Web3(Web3.HTTPProvider(rpc_url))
+    if not w3.is_connected():
+        raise RuntimeError(f"Failed to connect: {rpc_url}")
+
+    acct = w3.eth.account.from_key(pk)
+    abi = load_abi_from_env()
+    c = w3.eth.contract(address=Web3.to_checksum_address(contract_addr), abi=abi)
+
+    fn_abi = pick_function_abi(abi, fn_name)
+    call_args = build_args_from_payload(fn_abi, payload)
+
+    # エンコード（RPCのフィールド名は input）
+    data_hex = c.encode_abi(fn_name, args=call_args)
+
+    chain_id = w3.eth.chain_id
+    nonce = w3.eth.get_transaction_count(acct.address)
+
+    # sign用のdict（内部では data）
+    tx_for_sign = {
+        "from": acct.address,
+        "to": Web3.to_checksum_address(contract_addr),
+        "nonce": nonce,
+        "chainId": chain_id,
+        "value": 0,
+        "data": data_hex,
+    }
+
+    # gas
+    if args.gas is not None:
+        gas = args.gas
+    elif args.no_estimate:
+        gas = 300_000
+    else:
+        try:
+            gas = w3.eth.estimate_gas(tx_for_sign)
+        except Exception:
+            gas = 300_000
+
+    # fee
+    tx_type = 0
+    gas_price = None
+    max_fee = None
+    max_priority = None
+
+    if supports_eip1559(w3):
+        tx_type = 2
+        latest = w3.eth.get_block("latest")
+        base = int(latest["baseFeePerGas"])
+        max_priority = int(w3.to_wei(args.priority_gwei, "gwei"))
+        max_fee = base * 2 + max_priority
+    else:
+        gas_price = int(w3.eth.gas_price)
+
+    # RPCっぽい tx オブジェクト（※キー追加なし、見やすく整形するだけ）
+    rpc_tx = {
+        "type": q(tx_type),
+        "hash": None,  # 未送信なので未確定
+        "nonce": q(nonce),
+        "blockHash": None,
+        "blockNumber": None,
+        "transactionIndex": None,
+        "from": acct.address,
+        "to": Web3.to_checksum_address(contract_addr),
+        "value": q(0),
+        "gas": q(gas),
+        "input": data_hex,
+        "chainId": q(chain_id),
+    }
+
+    if tx_type == 2:
+        rpc_tx["maxPriorityFeePerGas"] = q(max_priority)
+        rpc_tx["maxFeePerGas"] = q(max_fee)
+        rpc_tx["accessList"] = []  # type2だと出ることが多い
+    else:
+        rpc_tx["gasPrice"] = q(gas_price)
+
+    print(json.dumps(reorder(rpc_tx), ensure_ascii=False, indent=2))
+
+if __name__ == "__main__":
+    main()

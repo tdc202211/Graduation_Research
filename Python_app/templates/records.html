@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>アップロード履歴</h1>
+<h1>ファイル一覧</h1>
 <p>ブロックチェーン上の FileRegistry から取得した最新情報一覧です。</p>
 
 {% if chain_error %}
@@ -16,6 +16,8 @@
                 <th style="padding:8px;">アップロード日時</th>
                 <th style="padding:8px;">ファイル名</th>
                 <th style="padding:8px;">File ID</th>
+                <th style="padding:8px;">コントラクトアドレス</th>
+                <th style="padding:8px;">詳細</th>
             </tr>
         </thead>
         <tbody>
@@ -23,9 +25,11 @@
             <tr style="border-bottom: 1px solid #f0f0f0;">
                 <td style="padding:8px; white-space: nowrap;">{{ item.updatedAt or item.uploadedAt or "-" }}</td>
                 <td style="padding:8px;">{{ item.fileName or "-" }}</td>
-                <td style="padding:8px; font-family: monospace;">
+                <td style="padding:8px; font-family: monospace;">{{ item.fileId or "-" }}</td>
+                <td style="padding:8px; font-family: monospace;">{{ contract_address or "-" }}</td>
+                <td style="padding:8px;">
                     {% if item.fileId %}
-                    <a href="{{ url_for('record_detail', file_id=item.fileId) }}">{{ item.fileId }}</a>
+                    <a href="{{ url_for('record_detail', file_id=item.fileId) }}" class="btn btn-secondary">詳細</a>
                     {% else %}
                     -
                     {% endif %}

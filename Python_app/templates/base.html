@@ -66,6 +66,191 @@
         input[type="file"] {
             margin: 8px 0 16px;
         }
+
+        .flow-section {
+            margin: 20px 0 28px;
+        }
+
+        .flow-title {
+            margin: 0 0 12px;
+            font-size: 18px;
+        }
+
+        .flow-layout {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+            transition: gap 0.4s ease;
+        }
+
+        .flow-left {
+            flex: 0 0 100%;
+            max-width: 100%;
+            min-width: 0;
+            transition: flex-basis 0.6s ease, max-width 0.6s ease;
+        }
+
+        .flow-detail {
+            flex: 0 0 0;
+            max-width: 0;
+            overflow: hidden;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: flex-basis 0.6s ease, max-width 0.6s ease, opacity 0.4s ease, transform 0.4s ease;
+            pointer-events: none;
+        }
+
+        .flow-layout.is-split .flow-left {
+            flex-basis: 30%;
+            max-width: 30%;
+        }
+
+        .flow-layout.is-split .flow-detail {
+            flex-basis: 70%;
+            max-width: 70%;
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        .flow-detail-card {
+            background: #f2f2f2;
+            border: 1px solid #d5d5d5;
+            border-radius: 8px;
+            padding: 16px 18px;
+        }
+
+        .flow-detail-title {
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .flow-detail-label {
+            margin: 12px 0 6px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .flow-detail-box {
+            background: #fff;
+            border: 1px solid #d1d1d1;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-all;
+        }
+
+        .flow-detail-code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+            background: #e5e5e5;
+        }
+
+        .flow-board {
+            --flow-gap: 26px;
+            --flow-step-height: 66px;
+            --flow-header-height: 60px;
+            display: block;
+        }
+
+        .flow-column {
+            display: flex;
+            flex-direction: column;
+            gap: var(--flow-gap);
+        }
+
+        .flow-column-header {
+            background: #0f4c5c;
+            color: #fff;
+            padding: 10px 12px;
+            text-align: center;
+            font-weight: 600;
+            border-radius: 6px;
+            height: var(--flow-header-height);
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .flow-node {
+            position: relative;
+            text-align: center;
+            box-sizing: border-box;
+            opacity: 0;
+            transform: translateY(-6px);
+            animation: flowIn 0.5s ease forwards;
+            animation-delay: var(--delay, 0s);
+        }
+
+        .flow-step {
+            padding: 10px 12px;
+            background: #f8e1d6;
+            border: 1px solid #d2b4a6;
+            border-radius: 6px;
+            font-size: 14px;
+            height: var(--flow-step-height);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            transition: border-color 0.2s ease, border-width 0.2s ease;
+        }
+
+        .flow-step.is-active {
+            border-color: #e36b2c;
+            border-width: 6px;
+        }
+
+        .flow-node:not(.flow-node-last)::after {
+            content: "▼";
+            position: absolute;
+            left: 50%;
+            bottom: calc(-1 * (var(--flow-gap) / 2) - 6px);
+            transform: translateX(-50%);
+            color: #1f1f1f;
+            font-size: 12px;
+            opacity: 0;
+            animation: flowIn 0.5s ease forwards;
+            animation-delay: var(--delay, 0s);
+        }
+
+
+        @keyframes flowIn {
+            from {
+                opacity: 0;
+                transform: translateY(-6px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 720px) {
+            .flow-board {
+                display: block;
+            }
+
+            .flow-layout {
+                flex-direction: column;
+            }
+
+            .flow-left,
+            .flow-detail {
+                flex-basis: auto;
+                max-width: 100%;
+            }
+
+            .flow-detail {
+                opacity: 1;
+                transform: none;
+                pointer-events: auto;
+                overflow: visible;
+            }
+        }
     </style>
 </head>
 
