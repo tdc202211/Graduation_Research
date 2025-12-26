@@ -4,56 +4,181 @@
 
 {% block content %}
 <div class="card">
-  <h1>アップロード完了</h1>
+  <h1>アップロード</h1>
 
   <div class="flow-section">
-    <h2 class="flow-title">アップロードの流れ</h2>
-    <div class="flow-layout" data-flow-layout>
+    <div class="flow-layout is-split is-static" data-flow-layout>
       <div class="flow-left">
         <div class="flow-board">
+          {% set extracted_payload = {
+            "fileHash": payload.fileHash,
+            "fileId": payload.fileId,
+            "fileName": payload.fileName
+          } %}
+          {% set extracted_payload_text = extracted_payload | tojson(indent=2) %}
+          {% set extracted_advanced = "【データ構造】\n"
+            ~ extracted_payload_text
+            ~ "\n\n【目的】\nオンチェーンに書き込む前に、ファイルの同一性を表す値（fileHash）と参照キー（fileId）をオフチェーンで確定する。"
+            ~ "\n\n【各フィールドの意味／作り方】\n・fileHash：ファイル内容に対してSHA-256を計算した結果（32byte）。改ざん検知の本体。"
+            ~ "\n・fileId：Boxが発行する一意ID。オンチェーン側で検索するためのキーとして使うため、数値に見えても基本は文字列として保持する。"
+            ~ "\n・fileName：人が識別しやすくするための表示名。"
+            ~ "\n\n【次工程での使われ方】\nこのJSONの値を引数としてコントラクト関数に渡すため、ABIエンコードされる。"
+          %}
+          {% set encode_payload = (encode_data or encode_error or "エンコード結果を取得できませんでした。") %}
+          {% set encode_advanced = "【データ構造】\n"
+            ~ encode_payload
+            ~ "\n\n【目的】\nJSONで用意した (fileHash, fileId, fileName) を、EVMが実行できる「関数呼び出しデータ（calldata）」へABIエンコードし、トランザクションのdataフィールドに載せる。"
+            ~ "\n\n【構造（先頭から順に）】\n(1) 0xf9d1efc3（4byte）\n・function selector。keccak256(\"関数名(引数型,...)\") の先頭4バイトで、呼び出す関数を識別する。"
+            ~ "\n\n(2) e3b0…b855（32byte）\n・第1引数（固定長）。fileHashをbytes32として格納（32バイト固定）。"
+            ~ "\n\n(3) 0x…60（32byte）\n・第2引数（string）のオフセット。動的型は先頭（head）に実体を置かず、後ろ（tail）への位置を指す。"
+            ~ "\n\n(4) 0x…a0（32byte）\n・第3引数（string）のオフセット。"
+            ~ "\n\n【動的領域（tail）の中身】\n(5) 0x…0d（32byte）\n・fileIdの長さ。 \"2079866414120\" は13文字なので 0x0d。"
+            ~ "\n\n(6) 32303739…3230（32byte境界まで0埋め）\n・fileId本体（ASCIIの16進表現）。末尾は32バイト単位になるように0x00でパディング。"
+            ~ "\n\n(7) 0x…09（32byte）\n・fileNameの長さ。\"hello.txt\" は9文字なので 0x09。"
+            ~ "\n\n(8) 68656c6c6f2e747874（32byte境界まで0埋め）\n・fileName本体（ASCIIの16進表現）＋パディング。"
+          %}
+          {% set tx_sign_note = "【目的】\n作成したトランザクション（type/nonce/to/input/fee等）に対し、送信者の秘密鍵でECDSA署名を付与して「改ざん不可能な承認済みデータ」にする。これにより、ネットワークは署名から送信者（from）を復元して真正性を検証できる。"
+            ~ "\n\n【署名によって変化・追加される主な要素】\n・r / s：ECDSA署名の主要成分（secp256k1）。トランザクション本体のハッシュに対する署名結果として付与される。"
+            ~ "\n・v：署名の復元ID（recovery id）。r,sと組み合わせて公開鍵（ひいてはfromアドレス）を復元するために使う。EIP-1559(type 0x2)でも同様に署名検証に利用される。"
+            ~ "\n・hash：署名済みトランザクションの識別子（txHash）。一般に「署名済みトランザクションをシリアライズしたバイト列」に対するkeccak256で得られる。送信後はこのhashでreceipt等を追跡する。"
+            ~ "\n\n【未確定であることを示すフィールド】\n・blockHash / blockNumber / transactionIndex：署名は完了しているが、まだブロックに取り込まれていないためnull（次工程で送信→承認されると値が入る）。"
+            ~ "\n\n【ポイント】\n署名対象にはto/input/valueだけでなく、nonce・chainId・gas/feeなども含まれるため、署名後にこれらを1ビットでも変更すると署名検証に失敗し、別トランザクションとして扱われる。"
+          %}
+          {% set tx_create_note = "【目的】\nABIエンコード済みcalldata（input）を、実行先コントラクト（to）と送信者（from）および実行条件（gas/fee/nonce/chainId）に結び付け、署名前のトランザクションとして成立させる。"
+            ~ "\n\n【状態を表すフィールド（作成直後は未確定）】\n・hash / blockHash / blockNumber / transactionIndex：未ブロック取り込みのためnull。送信・承認後に値が付与される。"
+            ~ "\n\n【識別・リプレイ防止】\n・chainId：送信先ネットワーク識別子。0x7a69（=31337）はHardhatローカルの典型値。署名に組み込まれ、他チェーンへのリプレイを防ぐ。"
+            ~ "\n・nonce：送信者アドレスごとの通し番号。0xfは「このアカウントの16番目の送信」を意味し、同nonceの重複送信を防ぐ。"
+            ~ "\n\n【当事者・宛先】\n・from：送信者（署名者）のEOAアドレス。"
+            ~ "\n・to：実行対象のコントラクトアドレス。EOA宛ではなくコントラクト宛の場合、inputを解釈して関数呼び出しとして実行される。"
+            ~ "\n\n【送金額と実行データ】\n・value：ETH送金額。0x0なので送金なし（コントラクト関数呼び出しのみ）。"
+            ~ "\n・input：calldata。先頭4byteが関数selector、以降がABIエンコードされた引数（前工程で生成したdata列）。"
+            ~ "\n\n【ガスと手数料（EIP-1559, type 0x2）】\n・type：0x2はEIP-1559形式のトランザクション。"
+            ~ "\n・gas：gas limit（実行に使ってよい上限）。実行が重いと不足してrevertになる可能性がある。"
+            ~ "\n・maxFeePerGas：1ガスあたりの支払上限（baseFee + tipの上限）。"
+            ~ "\n・maxPriorityFeePerGas：優先手数料（tip）。バリデータ/マイナーへの上乗せで、取り込まれやすさに影響する。"
+            ~ "\n\n【accessList】\n・accessList：EIP-2930のアクセスリスト。空なら事前宣言なし（通常は空でも動く）。"
+          %}
+          {% set storage_note = "【目的】\nトランザクション実行後、コントラクトのstateが更新され、mappingに紐づくレコードがEVMのstorageへ永続化されたことを、実際のslot値（raw_slots）から確認する。"
+            ~ "\n\n【mappingの格納位置（base_slotの意味）】\n・mapping_slot_index：mapping変数自体が置かれている“起点slot”（ここでは0）。"
+            ~ "\n・base_slot：mapping[key] の実データが始まるslot。"
+            ~ "\nSolidityのstorageでは、mappingの要素位置は概念的に次で決まる："
+            ~ "\nbase_slot = keccak256( abi.encode(key, mapping_slot_index) )"
+            ~ "\nつまり key(fileId)=\"2079866414120\" と mapping_slot_index=0 から keccak256 を計算した結果が base_slot（ここでは 0xf46a...e90）。"
+            ~ "\n\n【schema（構造体の並び）】\n・schema=\"bytes32,string,uint256,bool\" は、mappingの値が struct { bytes32; string; uint256; bool; } の順で並ぶ前提を表す。"
+            ~ "\n・structの各フィールドは（基本的に）base_slotから順番にslotを消費するため、"
+            ~ "\nfield0 → base_slot(+0)"
+            ~ "\nfield1 → base_slot(+1)"
+            ~ "\nfield2 → base_slot(+2)"
+            ~ "\nfield3 → base_slot(+3)"
+            ~ "\nのように連番slotとして観測できる。"
+            ~ "\n\n【raw_slotsの読み方（各slotが何を意味するか）】"
+            ~ "\n(1) slot ...e90：bytes32（fileHash）"
+            ~ "\n・valueがそのままfileHash（固定長32byteなので1slotに直置き）。"
+            ~ "\n\n(2) slot ...e91：string（fileName）"
+            ~ "\n・valueの先頭が 68 65 6c 6c 6f 2e 74 78 74 = \"hello.txt\" のASCII（16進）になっている。"
+            ~ "\n・末尾の 0x13 は “短いstring” の長さ情報（Solidityのshort string最適化）。"
+            ~ "\n長さ9文字の場合、2*9+1 = 19 = 0x13 となり、「このslot内に文字列本体が埋め込まれている」ことを示す。"
+            ~ "\n※長いstringの場合はここに実体が入らず、別領域（keccak256(base)起点の領域）に展開される。"
+            ~ "\n\n(3) slot ...e92：uint256（updatedAt 等）"
+            ~ "\n・valueの下位が 0x694cb1bf → 10進で 1766633919。"
+            ~ "\n・block.timestamp など「実行時刻」を保存している設計だと、ここが更新時刻として機能する。"
+            ~ "\n\n(4) slot ...e93：bool（exists 等）"
+            ~ "\n・valueが ...0001 なので true（Solidityではboolは0/1で表現され、slot単位で保持される）。"
+            ~ "\n\n【decoded_by_schema】\nraw_slotsをschemaに従って復号した結果で、getLatest(fileId) が返す値と一致することを確認できる。"
+          %}
+          {% set storage_payload = (storage_view_data or storage_view_error or "ストレージ情報を取得できませんでした。") %}
+          {% set storage_advanced = "【データ構造】\n" ~ storage_payload ~ "\n\n" ~ storage_note %}
           <div class="flow-column">
             <div class="flow-column-header flow-node" style="--delay: 0s;"
               data-title="ローカル"
               data-beginner="PC内でファイルを読み取り、送信の準備をする段階です。"
               data-advanced="ローカル環境でハッシュ計算や署名前処理を行います。">ローカル</div>
-            <div class="flow-step flow-node" style="--delay: 2s;"
+            <div class="flow-step flow-node" style="--delay: 3s;"
               data-title="ファイルから情報を抽出"
               data-beginner="配送物を倉庫からピッキングする"
-              data-advanced="{&#10;  &quot;fileHash&quot;: &quot;e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855&quot;,&#10;  &quot;fileId&quot;: &quot;2079866414120&quot;,&#10;  &quot;fileName&quot;: &quot;hello.txt&quot;,&#10;  &quot;uploadedAt&quot;: &quot;2025-12-22T16:47:25.643076+09:00&quot;,&#10;  &quot;txHash&quot;: &quot;0xe5aa92474f01bbb6299738c9a2bd7fd50e152dff8c7b7516fa9611949ed9a41f&quot;&#10;}">ファイルから情報を抽出</div>
-            <div class="flow-step flow-node" style="--delay: 4s;"
-              data-title="データをエンコード"
-              data-beginner="配送物を送るために包装紙で包む"
-              data-advanced="data={&#10;0x2f8609b7e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000d3230373938363634313431323000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000968656c6c6f2e7478740000000000000000000000000000000000000000000000}">データをエンコード</div>
+              data-advanced='{{ extracted_advanced | e }}'
+              data-stage-items="ファイルハッシュ,ファイル名,ファイルID"
+              data-stage-target="local">ファイルから情報を抽出</div>
             <div class="flow-step flow-node" style="--delay: 6s;"
+              data-title="データをエンコード"
+              data-beginner="配送物を送れる形に整えて包装する"
+              data-advanced='{{ encode_advanced | e }}'
+              data-stage-initial-title="ファイルから情報を抽出"
+              data-stage-initial-items="ファイルハッシュ,ファイル名,ファイルID"
+              data-stage-items="バイト列"
+              data-hide-placeholder="true"
+              data-stage-mode="stack"
+              data-stage-target="local">データをエンコード</div>
+            <div class="flow-step flow-node" style="--delay: 9s;"
               data-title="トランザクションの作成"
-              data-beginner="配送物を箱に詰め、送り先などの情報を記載する"
-              data-advanced="{&#10;  &quot;hash&quot;: null,&#10;  &quot;type&quot;: &quot;0x2&quot;,&#10;  &quot;nonce&quot;: &quot;0x1&quot;,&#10;  &quot;blockHash&quot;: null,&#10;  &quot;blockNumber&quot;: null,&#10;  &quot;transactionIndex&quot;: null,&#10;  &quot;from&quot;: &quot;0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266&quot;,&#10;  &quot;to&quot;: &quot;0x5FbDB2315678afecb367f032d93F642f64180aa3&quot;,&#10;  &quot;value&quot;: &quot;0x0&quot;,&#10;  &quot;gas&quot;: &quot;0x493e0&quot;,&#10;  &quot;maxFeePerGas&quot;: &quot;0xc1b71080&quot;,&#10;  &quot;maxPriorityFeePerGas&quot;: &quot;0x59682f00&quot;,&#10;  &quot;input&quot;: &quot;0x2f8609b7e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000d3230373938363634313431323000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000968656c6c6f2e7478740000000000000000000000000000000000000000000000&quot;,&#10;  &quot;accessList&quot;: [],&#10;  &quot;chainId&quot;: &quot;0x7a69&quot;&#10;}">トランザクションの作成</div>
-            <div class="flow-step flow-node" style="--delay: 8s;"
+              data-beginner="箱に詰めて、送り先などの伝票を書く"
+              data-advanced="読み込み中..."
+              data-advanced-note='{{ tx_create_note | e }}'
+              data-preview-url="{{ url_for('preview_presign') }}"
+              data-stage-items="from,to,nonce,gas/fee,input"
+              data-stage-target="local">トランザクションの作成</div>
+            <div class="flow-step flow-node" style="--delay: 12s;"
               data-title="トランザクションを署名"
-              data-beginner="送り主の名前を記載する"
-              data-advanced="{&#10;  &quot;hash&quot;: &quot;eb327ff1d3d15a583c980b3ac9f3861f477a8146f21b6e3e935dc1403eb4215a&quot;,&#10;  &quot;type&quot;: &quot;0x2&quot;,&#10;  &quot;nonce&quot;: &quot;0x1&quot;,&#10;  &quot;blockHash&quot;: null,&#10;  &quot;blockNumber&quot;: null,&#10;  &quot;transactionIndex&quot;: null,&#10;  &quot;from&quot;: &quot;0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266&quot;,&#10;  &quot;to&quot;: &quot;0x5FbDB2315678afecb367f032d93F642f64180aa3&quot;,&#10;  &quot;value&quot;: &quot;0x0&quot;,&#10;  &quot;gas&quot;: &quot;0x493e0&quot;,&#10;  &quot;maxFeePerGas&quot;: &quot;0xc1b71080&quot;,&#10;  &quot;maxPriorityFeePerGas&quot;: &quot;0x59682f00&quot;,&#10;  &quot;input&quot;: &quot;0x2f8609b7e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000d3230373938363634313431323000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000968656c6c6f2e7478740000000000000000000000000000000000000000000000&quot;,&#10;  &quot;accessList&quot;: [],&#10;  &quot;chainId&quot;: &quot;0x7a69&quot;,&#10;  &quot;v&quot;: &quot;0x0&quot;,&#10;  &quot;r&quot;: &quot;0x32e42a72060b54d4d9e0fac03a698c5fc8ed1877b479f0135863f5d90864fa07&quot;,&#10;  &quot;s&quot;: &quot;0x72e1012ad3214c4ef802c7e55bb990bc888f6a560a411e3c2af5f9123d929f1e&quot;&#10;}">トランザクションを署名</div>
-            <div class="flow-step flow-node" style="--delay: 10s;"
+              data-beginner="送り主のサインをする（本人確認）"
+              data-advanced="読み込み中..."
+              data-advanced-note='{{ tx_sign_note | e }}'
+              data-preview-url="{{ url_for('preview_signed') }}"
+              data-stage-items="署名(v,r,s),txHash"
+              data-stage-target="local">トランザクションを署名</div>
+            <div class="flow-step flow-node" style="--delay: 15s;"
               data-title="トランザクションを送信"
-              data-beginner="受取人に配達完了"
-              data-advanced="なし">トランザクションを送信</div>
-            <div class="flow-column-header flow-node" style="--delay: 12s;"
+              data-beginner="トラックに積み込む"
+              data-advanced="なし"
+              data-stage-target="chain">トランザクションを送信</div>
+            <div class="flow-column-header flow-node" style="--delay: 18s;"
               data-title="ブロックチェーン"
               data-beginner="ここからはネットワーク側の処理です。"
               data-advanced="ブロックに取り込まれて確定していきます。">ブロックチェーン</div>
-            <div class="flow-step flow-node flow-node-last" style="--delay: 14s;"
+            <div class="flow-step flow-node flow-node-last" style="--delay: 21s;"
               data-title="データをストレージに保管"
               data-beginner="包装を解いて家に設置"
-              data-advanced="{&#10;  &quot;contract&quot;: &quot;0x5FbDB2315678afecb367f032d93F642f64180aa3&quot;,&#10;  &quot;rpc&quot;: &quot;http://127.0.0.1:8545&quot;,&#10;  &quot;mapping_slot_index&quot;: 0,&#10;  &quot;key(fileId)&quot;: &quot;2079866414120&quot;,&#10;  &quot;base_slot&quot;: &quot;0xf46a09a3540b27f1477139b41b47450af9b8560283f4a6f3987d97df29ea3e90&quot;,&#10;  &quot;schema&quot;: &quot;bytes32,string,uint256,bool&quot;,&#10;  &quot;raw_slots&quot;: [&#10;    {&#10;      &quot;slot&quot;: &quot;0xf46a09a3540b27f1477139b41b47450af9b8560283f4a6f3987d97df29ea3e90&quot;,&#10;      &quot;value&quot;: &quot;0x0000000000000000000000000000000000000000000000000000000000000000&quot;&#10;    },&#10;    {&#10;      &quot;slot&quot;: &quot;0xf46a09a3540b27f1477139b41b47450af9b8560283f4a6f3987d97df29ea3e91&quot;,&#10;      &quot;value&quot;: &quot;0x0000000000000000000000000000000000000000000000000000000000000000&quot;&#10;    },&#10;    {&#10;      &quot;slot&quot;: &quot;0xf46a09a3540b27f1477139b41b47450af9b8560283f4a6f3987d97df29ea3e92&quot;,&#10;      &quot;value&quot;: &quot;0x0000000000000000000000000000000000000000000000000000000000000000&quot;&#10;    },&#10;    {&#10;      &quot;slot&quot;: &quot;0xf46a09a3540b27f1477139b41b47450af9b8560283f4a6f3987d97df29ea3e93&quot;,&#10;      &quot;value&quot;: &quot;0x0000000000000000000000000000000000000000000000000000000000000000&quot;&#10;    },&#10;    {&#10;      &quot;slot&quot;: &quot;0xf46a09a3540b27f1477139b41b47450af9b8560283f4a6f3987d97df29ea3e94&quot;,&#10;      &quot;value&quot;: &quot;0x0000000000000000000000000000000000000000000000000000000000000000&quot;&#10;    },&#10;    {&#10;      &quot;slot&quot;: &quot;0xf46a09a3540b27f1477139b41b47450af9b8560283f4a6f3987d97df29ea3e95&quot;,&#10;      &quot;value&quot;: &quot;0x0000000000000000000000000000000000000000000000000000000000000000&quot;&#10;    }&#10;  ],&#10;  &quot;decoded_by_schema&quot;: {&#10;    &quot;field0_bytes32&quot;: &quot;0x0000000000000000000000000000000000000000000000000000000000000000&quot;,&#10;    &quot;field1_string&quot;: &quot;&quot;,&#10;    &quot;field2_uint256&quot;: 0,&#10;    &quot;field3_bool&quot;: false&#10;  }&#10;}">データをストレージに保管</div>
+              data-advanced='{{ storage_advanced | e }}'
+              data-stage-items="base_slot,raw_slots,decoded_by_schema"
+              data-stage-target="chain">データをストレージに保管</div>
           </div>
         </div>
       </div>
-      <div class="flow-detail">
-        <div class="flow-detail-card">
-          <div class="flow-detail-title">要素の詳細な説明</div>
-          <div class="flow-detail-label">初心者向けの説明</div>
-          <div class="flow-detail-box" data-flow-beginner></div>
-          <div class="flow-detail-label">上級者向けの説明</div>
-          <pre class="flow-detail-box flow-detail-code" data-flow-advanced></pre>
+      <div class="flow-stage-wrap">
+        <div class="flow-stage" data-flow-stage>
+          <div class="flow-stage-panel" data-flow-stage-local>
+            <div class="flow-stage-label">ローカル</div>
+            <div class="flow-stage-card" data-flow-stage-card>
+              <div class="flow-stage-title" data-flow-stage-title>ローカル</div>
+              <ul class="flow-stage-list" data-flow-stage-list></ul>
+            </div>
+            <div class="flow-stage-placeholder" data-flow-stage-placeholder>
+              <svg viewBox="0 0 200 240" role="img" aria-label="file icon">
+                <path d="M40 20h80l40 40v160H40z" fill="none" stroke="#111" stroke-width="6"/>
+                <path d="M120 20v40h40" fill="none" stroke="#111" stroke-width="6"/>
+                <path d="M60 100h80M60 130h80M60 160h80" fill="none" stroke="#111" stroke-width="6" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="flow-stage-panel" data-flow-stage-chain>
+            <div class="flow-stage-label">ブロックチェーン</div>
+            <div class="flow-stage-card" data-flow-stage-card-chain>
+              <div class="flow-stage-title" data-flow-stage-title-chain>ブロックチェーン</div>
+              <ul class="flow-stage-list" data-flow-stage-list-chain></ul>
+            </div>
+            <div class="flow-stage-placeholder" data-flow-stage-placeholder-chain>
+              <svg viewBox="0 0 200 240" role="img" aria-label="file icon">
+                <path d="M40 20h80l40 40v160H40z" fill="none" stroke="#111" stroke-width="6"/>
+                <path d="M120 20v40h40" fill="none" stroke="#111" stroke-width="6"/>
+                <path d="M60 100h80M60 130h80M60 160h80" fill="none" stroke="#111" stroke-width="6" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="flow-controls">
+          <button class="flow-btn" type="button" data-flow-control="start"><span class="flow-btn-icon">▶</span>スタート</button>
+          <button class="flow-btn" type="button" data-flow-control="pause"><span class="flow-btn-icon">⏸</span>停止</button>
+          <button class="flow-btn" type="button" data-flow-control="prev"><span class="flow-btn-icon">⏪</span>戻る</button>
+          <button class="flow-btn" type="button" data-flow-control="next"><span class="flow-btn-icon">⏩</span>次</button>
         </div>
       </div>
     </div>
@@ -61,33 +186,10 @@
 
   <div class="result">
     <p><strong>ファイル名:</strong> {{ payload.fileName }}</p>
-    <p><strong>File ID:</strong> {{ payload.fileId }}</p>
-
     {% if conflict %}
-    <p>
-      既に存在していたファイル（ID: {{ conflict.id }}）の新しいバージョンとして保存されました。
-    </p>
-    {% endif %}
-
-    <hr>
-
-    <p><strong>ファイルの SHA-256 ハッシュ:</strong></p>
-    <pre class="hash">{{ payload.fileHash }}</pre>
-
-    <hr>
-
-    <p><strong>ブロックチェーン登録結果:</strong></p>
-    {% if tx_hash %}
-    <p class="muted"><strong>tx_hash:</strong> {{ tx_hash }}</p>
+    <p>既に存在していたファイルの新しいバージョンとして保存されました。</p>
     {% else %}
-    <p class="error"><strong>Blockchain Error:</strong> {{ chain_error }}</p>
-    {% endif %}
-
-    {% if saved_path %}
-    <p class="muted"><strong>Saved JSON:</strong> {{ saved_path }}</p>
-    {% endif %}
-    {% if save_error %}
-    <p class="error"><strong>JSON Save Error:</strong> {{ save_error }}</p>
+    <p>新しいファイルとして保存されました。</p>
     {% endif %}
   </div>
 
@@ -97,42 +199,477 @@
   </div>
 </div>
 
+<div class="flow-modal-overlay" data-flow-modal-overlay>
+  <div class="flow-modal" role="dialog" aria-modal="true" aria-labelledby="flow-modal-title">
+    <div class="flow-modal-header">
+      <div class="flow-modal-title" id="flow-modal-title"></div>
+      <button class="flow-modal-close" type="button" data-flow-modal-close>閉じる</button>
+    </div>
+    <div class="flow-modal-body">
+      <div class="flow-modal-box" data-flow-modal-beginner></div>
+      <div class="flow-modal-box flow-modal-code" data-flow-modal-advanced></div>
+    </div>
+  </div>
+</div>
+
 <script>
   (function () {
     const layout = document.querySelector("[data-flow-layout]");
     if (!layout) return;
 
     const steps = Array.from(layout.querySelectorAll(".flow-step"));
-    const beginnerBox = layout.querySelector("[data-flow-beginner]");
-    const advancedBox = layout.querySelector("[data-flow-advanced]");
+    const modalOverlay = document.querySelector("[data-flow-modal-overlay]");
+    const modalTitle = document.querySelector("[data-flow-modal-title]");
+    const modalBeginner = document.querySelector("[data-flow-modal-beginner]");
+    const modalAdvanced = document.querySelector("[data-flow-modal-advanced]");
+    const modalClose = document.querySelector("[data-flow-modal-close]");
+    const stageCard = document.querySelector("[data-flow-stage-card]");
+    const stageTitle = document.querySelector("[data-flow-stage-title]");
+    const stageList = document.querySelector("[data-flow-stage-list]");
+    const stagePlaceholder = document.querySelector("[data-flow-stage-placeholder]");
+    const stageCardChain = document.querySelector("[data-flow-stage-card-chain]");
+    const stageTitleChain = document.querySelector("[data-flow-stage-title-chain]");
+    const stageListChain = document.querySelector("[data-flow-stage-list-chain]");
+    const stagePlaceholderChain = document.querySelector("[data-flow-stage-placeholder-chain]");
+    const flowNodes = Array.from(layout.querySelectorAll(".flow-node"));
+    const controlStart = document.querySelector("[data-flow-control='start']");
+    const controlPause = document.querySelector("[data-flow-control='pause']");
+    const controlPrev = document.querySelector("[data-flow-control='prev']");
+    const controlNext = document.querySelector("[data-flow-control='next']");
 
-    const setActive = (step) => {
-      if (!layout.classList.contains("is-split")) {
-        return;
-      }
-      steps.forEach((s) => s.classList.remove("is-active"));
-      step.classList.add("is-active");
-      if (beginnerBox) beginnerBox.textContent = step.dataset.beginner || "";
-      if (advancedBox) advancedBox.textContent = step.dataset.advanced || "";
+    const parseItems = (value) =>
+      (value || "")
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean);
+
+    const clearStage = (target) => {
+      const useChain = target === "chain";
+      const card = useChain ? stageCardChain : stageCard;
+      const title = useChain ? stageTitleChain : stageTitle;
+      const list = useChain ? stageListChain : stageList;
+      if (!card || !title || !list) return;
+      card.classList.remove("is-stack");
+      card.classList.remove("is-extract");
+      card.classList.remove("is-encode");
+      title.textContent = "";
+      list.innerHTML = "";
+      card.classList.add("is-hiding");
+      card.classList.remove("is-visible");
+      void card.offsetWidth;
+      card.classList.remove("is-hiding");
     };
 
+    const buildStageBlock = (title, items) => {
+      const block = document.createElement("div");
+      block.className = "flow-stage-block";
+      if (title) {
+        const header = document.createElement("div");
+        header.className = "flow-stage-block-title";
+        header.textContent = title;
+        block.appendChild(header);
+      }
+      const list = document.createElement("ul");
+      list.className = "flow-stage-list";
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        list.appendChild(li);
+      });
+      block.appendChild(list);
+      return block;
+    };
+
+    const getStackContainer = (card) => {
+      let container = card.querySelector(".flow-stage-stack");
+      if (!container) {
+        container = document.createElement("div");
+        container.className = "flow-stage-stack";
+        card.appendChild(container);
+      }
+      return container;
+    };
+
+      const renderStage = ({ title, items, target, isExtract, isEncode }) => {
+      const useChain = target === "chain";
+      const card = useChain ? stageCardChain : stageCard;
+      const titleEl = useChain ? stageTitleChain : stageTitle;
+      const listEl = useChain ? stageListChain : stageList;
+      if (!card || !titleEl || !listEl) return;
+      card.classList.remove("is-stack");
+      card.classList.toggle("is-extract", Boolean(isExtract));
+      card.classList.toggle("is-encode", Boolean(isEncode));
+      titleEl.textContent = title;
+      listEl.innerHTML = "";
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        listEl.appendChild(li);
+      });
+      card.classList.remove("is-visible");
+      void card.offsetWidth;
+      card.classList.add("is-visible");
+    };
+
+    const renderStackStage = ({
+      target,
+      firstTitle,
+      firstItems,
+      secondTitle,
+      secondItems,
+      isExtract,
+      isEncode,
+      showArrow = true,
+      showSecond = true,
+      animateCard = true,
+      revealVisible = true,
+    }) => {
+      const useChain = target === "chain";
+      const card = useChain ? stageCardChain : stageCard;
+      const titleEl = useChain ? stageTitleChain : stageTitle;
+      const listEl = useChain ? stageListChain : stageList;
+      if (!card || !titleEl || !listEl) return;
+      card.classList.add("is-stack");
+      card.classList.toggle("is-extract", Boolean(isExtract));
+      card.classList.toggle("is-encode", Boolean(isEncode));
+      const stack = getStackContainer(card);
+      stack.innerHTML = "";
+      stack.appendChild(buildStageBlock(firstTitle, firstItems));
+      if (showArrow || showSecond) {
+        const reveal = document.createElement("div");
+        reveal.className = revealVisible ? "flow-stage-reveal" : "flow-stage-reveal is-reserved";
+        reveal.dataset.reveal = "stack";
+        if (showArrow) {
+          const arrow = document.createElement("div");
+          arrow.className = "flow-stage-arrow";
+          arrow.textContent = "↓";
+          reveal.appendChild(arrow);
+        }
+        if (showSecond) {
+          reveal.appendChild(buildStageBlock(secondTitle, secondItems));
+        }
+        stack.appendChild(reveal);
+        if (revealVisible) {
+          requestAnimationFrame(() => {
+            reveal.classList.add("is-visible");
+          });
+        }
+      }
+      if (animateCard) {
+        card.classList.remove("is-visible");
+        void card.offsetWidth;
+        card.classList.add("is-visible");
+      } else {
+        card.classList.add("is-visible");
+      }
+    };
+
+    const setPlaceholderVisible = (target, visible) => {
+      const placeholder = target === "chain" ? stagePlaceholderChain : stagePlaceholder;
+      if (!placeholder) return;
+      placeholder.style.display = visible ? "" : "none";
+    };
+
+    const buildStage = (step, overrides = {}) => {
+      if (!overrides.forceRender && !shouldRenderStageForStep(step)) {
+        return;
+      }
+      const titleText = step?.dataset?.title || step?.textContent || "";
+      const isExtract = overrides.isExtract ?? titleText.trim() === "ファイルから情報を抽出";
+      const isEncode = overrides.isEncode ?? titleText.trim() === "データをエンコード";
+      const mode = overrides.mode ?? step.dataset.stageMode ?? "";
+      const target = overrides.target ?? step.dataset.stageTarget ?? "local";
+        if (mode === "stack") {
+          const firstTitle =
+            overrides.firstTitle ?? step.dataset.stageInitialTitle ?? step.dataset.title ?? step.textContent ?? "";
+          const firstItems = overrides.firstItems ?? parseItems(step.dataset.stageInitialItems);
+          const secondTitle = overrides.secondTitle ?? step.dataset.title ?? step.textContent ?? "";
+          const secondItems = overrides.secondItems ?? parseItems(step.dataset.stageItems);
+        renderStackStage({
+          target,
+          firstTitle,
+          firstItems,
+          secondTitle,
+          secondItems,
+          isExtract,
+          isEncode,
+          showArrow: overrides.showArrow ?? true,
+          showSecond: overrides.showSecond ?? true,
+          animateCard: overrides.animateCard ?? true,
+          revealVisible: overrides.revealVisible ?? true,
+        });
+      } else {
+        const title = overrides.title ?? step.dataset.title ?? step.textContent ?? "";
+        const items = overrides.items ?? parseItems(step.dataset.stageItems);
+        renderStage({ title, items, target, isExtract, isEncode });
+      }
+    };
+
+    const openModal = (step) => {
+      if (modalTitle) modalTitle.textContent = step.dataset.title || step.textContent || "";
+      if (modalBeginner) modalBeginner.textContent = step.dataset.beginner || "";
+      if (modalAdvanced) modalAdvanced.innerHTML = step.dataset.advanced || "";
+      if (modalOverlay) modalOverlay.classList.add("is-open");
+      buildStage(step);
+    };
+
+    const closeModal = () => {
+      if (modalOverlay) modalOverlay.classList.remove("is-open");
+    };
+
+    const parseSeconds = (value) => {
+      if (!value) return 0;
+      if (value.endsWith("ms")) return parseFloat(value) / 1000;
+      return parseFloat(value);
+    };
+
+    const shouldRenderStageForStep = (step) => {
+      const title = step?.dataset?.title || step?.textContent || "";
+      return title.trim() === "ファイルから情報を抽出";
+    };
+
+    const getTiming = (step) => {
+      const styles = getComputedStyle(step);
+      const inlineDelay = step.style.getPropertyValue("--delay");
+      const inlineDuration = step.style.getPropertyValue("--flow-duration");
+      const delayValue = inlineDelay || styles.getPropertyValue("--delay") || styles.animationDelay;
+      const durationValue = inlineDuration || styles.getPropertyValue("--flow-duration") || styles.animationDuration;
+      return {
+        delay: parseSeconds(delayValue.trim()),
+        duration: parseSeconds(durationValue.trim()),
+      };
+    };
     if (steps.length > 0) {
-      steps.forEach((step) => step.addEventListener("click", () => setActive(step)));
+      steps.forEach((step) => step.addEventListener("click", () => openModal(step)));
+      let activeHighlight = null;
+      let encodeRevealTimer = null;
+      const setHighlight = (step) => {
+        if (activeHighlight) {
+          activeHighlight.classList.remove("is-animating");
+          activeHighlight.style.borderColor = "";
+          activeHighlight.style.borderWidth = "";
+        }
+        activeHighlight = step;
+        step.classList.add("is-animating");
+        step.style.borderColor = "#e04b3f";
+        step.style.borderWidth = "6px";
+      };
+
+      const setFlowAnimationState = (state) => {
+        flowNodes.forEach((node) => {
+          node.style.animationPlayState = state;
+        });
+      };
+
+      const applyStepStart = (step) => {
+        const initialItems = parseItems(step.dataset.stageInitialItems);
+        const initialTitle = step.dataset.stageInitialTitle || step.dataset.title || step.textContent || "";
+        const stepTitle = (step.dataset.title || step.textContent || "").trim();
+        setHighlight(step);
+        if (encodeRevealTimer) {
+          clearTimeout(encodeRevealTimer);
+          encodeRevealTimer = null;
+        }
+        clearStage("local");
+        clearStage("chain");
+        const isExtractStep = shouldRenderStageForStep(step);
+        const isEncodeStep = stepTitle === "データをエンコード";
+        setPlaceholderVisible("local", isExtractStep);
+        setPlaceholderVisible("chain", false);
+        if (isExtractStep) {
+          const items = initialItems.length > 0 ? initialItems : parseItems(step.dataset.stageItems);
+          if (items.length > 0) {
+            buildStage(step, { title: initialTitle, items, mode: "simple", forceRender: true });
+          }
+        }
+        if (isEncodeStep) {
+          buildStage(step, {
+            mode: "stack",
+            firstTitle: "",
+            firstItems: initialItems,
+            secondTitle: "",
+            secondItems: parseItems(step.dataset.stageItems),
+            showArrow: true,
+            showSecond: true,
+            animateCard: false,
+            revealVisible: false,
+            isEncode: true,
+            forceRender: true,
+          });
+          const target = step.dataset.stageTarget || "local";
+          const card = target === "chain" ? stageCardChain : stageCard;
+          if (card) {
+            card.classList.remove("is-visible");
+            void card.offsetWidth;
+            card.classList.add("is-visible");
+          }
+          const reveal = card ? card.querySelector(".flow-stage-reveal") : null;
+          if (reveal) {
+            reveal.classList.remove("is-visible");
+            encodeRevealTimer = setTimeout(() => {
+              reveal.classList.remove("is-reserved");
+              requestAnimationFrame(() => {
+                reveal.classList.add("is-visible");
+              });
+            }, 1000);
+          }
+        }
+      };
+
+      const applyStepEnd = (step) => {
+        const stepTitle = (step.dataset.title || step.textContent || "").trim();
+        const isExtractStep = shouldRenderStageForStep(step);
+        const isEncodeStep = stepTitle === "データをエンコード";
+        if (isExtractStep) {
+          setPlaceholderVisible("local", true);
+          setPlaceholderVisible("chain", false);
+          return;
+        }
+        if (isEncodeStep) {
+          setPlaceholderVisible("local", false);
+          setPlaceholderVisible("chain", false);
+          return;
+        }
+        clearStage("local");
+        clearStage("chain");
+        setPlaceholderVisible("local", false);
+        setPlaceholderVisible("chain", false);
+      };
+
+      const timelineSteps = steps
+        .filter((step) => step.dataset.stageItems || step.dataset.stageInitialItems)
+        .map((step, index) => {
+          const timing = getTiming(step);
+          const startMs = timing.delay * 1000;
+          const endMs = (timing.delay + timing.duration) * 1000;
+          return { step, startMs, endMs };
+        });
+
+      const events = [];
+      let cumulativePause = 0;
+      timelineSteps.forEach((entry, index) => {
+        const pauseAfterMs = 0;
+        const startMs = entry.startMs + cumulativePause;
+        const endMs = entry.endMs + cumulativePause;
+        events.push({
+          time: startMs,
+          action: () => {
+            applyStepStart(entry.step);
+            currentIndex = index;
+          },
+        });
+        events.push({
+          time: endMs,
+          action: () => {
+            applyStepEnd(entry.step);
+            currentIndex = index;
+          },
+        });
+        cumulativePause += pauseAfterMs;
+      });
+
+      let timeouts = [];
+      let isPlaying = false;
+      let playStart = 0;
+      let elapsedMs = 0;
+      let currentIndex = -1;
+
+      const clearTimers = () => {
+        timeouts.forEach((id) => clearTimeout(id));
+        timeouts = [];
+      };
+
+      const scheduleFrom = (elapsed) => {
+        clearTimers();
+        events.forEach((evt) => {
+          if (evt.time < elapsed) return;
+          const id = setTimeout(evt.action, evt.time - elapsed);
+          timeouts.push(id);
+        });
+      };
+
+      const startPlayback = () => {
+        if (isPlaying || timelineSteps.length === 0) return;
+        isPlaying = true;
+        setFlowAnimationState("running");
+        playStart = performance.now();
+        scheduleFrom(elapsedMs);
+      };
+
+      const resetPlayback = () => {
+        clearTimers();
+        elapsedMs = 0;
+        currentIndex = -1;
+        isPlaying = false;
+        setFlowAnimationState("running");
+        startPlayback();
+      };
+
+      const pausePlayback = () => {
+        if (!isPlaying) return;
+        isPlaying = false;
+        elapsedMs += performance.now() - playStart;
+        clearTimers();
+        setFlowAnimationState("paused");
+      };
+
+      const jumpToStep = (index) => {
+        if (index < 0 || index >= timelineSteps.length) return;
+        pausePlayback();
+        const entry = timelineSteps[index];
+        applyStepStart(entry.step);
+        elapsedMs = entry.startMs;
+        currentIndex = index;
+      };
+
+      if (controlStart) controlStart.addEventListener("click", startPlayback);
+      if (controlPause) controlPause.addEventListener("click", pausePlayback);
+      if (controlPrev) {
+        controlPrev.addEventListener("click", () => {
+          const targetIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
+          jumpToStep(targetIndex);
+        });
+      }
+      if (controlNext) {
+        controlNext.addEventListener("click", () => {
+          const targetIndex =
+            currentIndex >= timelineSteps.length - 1 ? timelineSteps.length - 1 : currentIndex + 1;
+          jumpToStep(targetIndex);
+        });
+      }
+
+      resetPlayback();
     }
 
-    let maxDelay = 0;
-    layout.querySelectorAll(".flow-node").forEach((node) => {
-      const delay = parseFloat(getComputedStyle(node).getPropertyValue("--delay")) || 0;
-      maxDelay = Math.max(maxDelay, delay);
+    if (modalClose) modalClose.addEventListener("click", closeModal);
+    if (modalOverlay) {
+      modalOverlay.addEventListener("click", (event) => {
+        if (event.target === modalOverlay) closeModal();
+      });
+    }
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeModal();
     });
 
-    const totalMs = (maxDelay + 0.6) * 1000;
-    setTimeout(() => {
-      layout.classList.add("is-split");
-      if (steps.length > 0) {
-        setActive(steps[0]);
+    const updateStepAdvanced = (step, text) => {
+      if (!step) return;
+      const note = step.dataset.advancedNote;
+      const base = text || "";
+      const header = base ? `【データ構造】\n${base}` : base;
+      step.dataset.advanced = note ? `${header}\n\n${note}` : header;
+      if (modalAdvanced) {
+        modalAdvanced.innerHTML = step.dataset.advanced || "";
       }
-    }, totalMs);
+    };
+
+    steps.forEach((step) => {
+      const url = step.dataset.previewUrl;
+      if (!url) return;
+      fetch(url)
+        .then((res) => res.text())
+        .then((text) => updateStepAdvanced(step, text))
+        .catch((err) => updateStepAdvanced(step, `Error: ${err}`));
+    });
   })();
 </script>
 {% endblock %}

@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 import os
 import json
 from datetime import datetime, timezone, timedelta
+import subprocess
+import sys
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -142,14 +144,10 @@ def upload():
     payload_dir = Path(__file__).resolve().parent / "payloads"
     payload_dir.mkdir(parents=True, exist_ok=True)
 
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    payload_path = payload_dir / f"{ts}_{payload['fileId']}.json"
     latest_path = payload_dir / "latest.json"
 
     save_error = None
     try:
-        with payload_path.open("w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
         with latest_path.open("w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
     except Exception as ex:
@@ -157,14 +155,56 @@ def upload():
 
     session["last_upload_payload"] = payload
 
+    encode_data = None
+    encode_error = None
+    try:
+        script_path = Path(__file__).resolve().parent / "encode_latest_payload.py"
+        result = subprocess.run(
+            [sys.executable, str(script_path)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        encode_data = result.stdout.strip()
+    except Exception as ex:
+        encode_error = f"{type(ex).__name__}: {ex}"
+
+    storage_view_data = None
+    storage_view_error = None
+    try:
+        script_path = Path(__file__).resolve().parent / "view_storage_format.py"
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(script_path),
+                "--file-id",
+                payload["fileId"],
+                "--offline",
+                "--payload",
+                str(latest_path),
+                "--dump-slots",
+                "4",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        storage_view_data = result.stdout.strip()
+    except Exception as ex:
+        storage_view_error = f"{type(ex).__name__}: {ex}"
+
     return render_template(
         "upload_result.html",
         payload=payload,
-        saved_path=str(payload_path),
+        saved_path=str(latest_path),
         save_error=save_error,
         conflict=conflict_info,
         tx_hash=tx_hash,
         chain_error=chain_error,
+        encode_data=encode_data,
+        encode_error=encode_error,
+        storage_view_data=storage_view_data,
+        storage_view_error=storage_view_error,
     )
 
 
@@ -199,7 +239,14 @@ def record_detail(file_id):
     except Exception as ex:
         chain_error = f"{type(ex).__name__}: {ex}"
 
-    return render_template("record_detail.html", record=record, file_id=file_id, chain_error=chain_error)
+    contract_address = os.getenv("ETH_CONTRACT_ADDRESS")
+    return render_template(
+        "record_detail.html",
+        record=record,
+        file_id=file_id,
+        chain_error=chain_error,
+        contract_address=contract_address,
+    )
 
 
 @app.route("/payload/latest")
@@ -208,6 +255,46 @@ def latest_payload():
     if not payload:
         return jsonify({"error": "no payload"}), 404
     return jsonify(payload)
+
+
+@app.route("/preview/presign")
+def preview_presign():
+    latest_path = Path(__file__).resolve().parent / "payloads" / "latest.json"
+    script_path = Path(__file__).resolve().parent / "tx_preview_presign.py"
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script_path), str(latest_path)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout, 200, {"Content-Type": "text/plain; charset=utf-8"}
+    except Exception as ex:
+        return f"{type(ex).__name__}: {ex}", 500, {"Content-Type": "text/plain; charset=utf-8"}
+
+
+@app.route("/preview/signed")
+def preview_signed():
+    latest_path = Path(__file__).resolve().parent / "payloads" / "latest.json"
+    presign_script = Path(__file__).resolve().parent / "tx_preview_presign.py"
+    sign_script = Path(__file__).resolve().parent / "tx_preview_signed.py"
+    try:
+        presign = subprocess.run(
+            [sys.executable, str(presign_script), str(latest_path)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        result = subprocess.run(
+            [sys.executable, str(sign_script), str(latest_path), "--from-presign", "-"],
+            input=presign.stdout,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout, 200, {"Content-Type": "text/plain; charset=utf-8"}
+    except Exception as ex:
+        return f"{type(ex).__name__}: {ex}", 500, {"Content-Type": "text/plain; charset=utf-8"}
 
 
 @app.route("/logout")

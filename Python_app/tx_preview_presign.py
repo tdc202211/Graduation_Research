@@ -12,10 +12,10 @@ FALLBACK_MIN_ABI = [
     {
         "inputs": [
             {"internalType": "bytes32", "name": "fileHash", "type": "bytes32"},
-            {"internalType": "string", "name": "boxUrl", "type": "string"},
+            {"internalType": "string", "name": "fileId", "type": "string"},
             {"internalType": "string", "name": "fileName", "type": "string"},
         ],
-        "name": "recordFile",
+        "name": "recordOrUpdate",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function",
@@ -135,7 +135,7 @@ def main() -> None:
     if not rpc_url or not pk or not contract_addr:
         raise RuntimeError("Need ETH_RPC_URL / ETH_PRIVATE_KEY / ETH_CONTRACT_ADDRESS in .env")
 
-    fn_name = (args.fn or os.getenv("ETH_FUNCTION_NAME", "recordFile")).strip()
+    fn_name = (args.fn or os.getenv("ETH_FUNCTION_NAME", "recordOrUpdate")).strip()
 
     payload = json.loads(Path(args.payload).read_text(encoding="utf-8"))
 

@@ -9,6 +9,7 @@ from datetime import datetime, timezone, timedelta
 
 from dotenv import load_dotenv
 from web3 import Web3
+from web3.exceptions import TimeExhausted
 
 
 _MIN_ABI = [
@@ -52,6 +53,22 @@ _MIN_ABI = [
 ]
 
 _TX_LOCK = threading.Lock()
+
+
+def encode_record_or_update_data(file_hash: str, box_file_id: str, box_file_name: str) -> str:
+    file_hash32 = EthereumClient._sha256_hex_to_bytes32(file_hash)
+
+    w3 = Web3()
+    contract = w3.eth.contract(
+        address="0x0000000000000000000000000000000000000000",
+        abi=_MIN_ABI,
+    )
+
+    args = [file_hash32, str(box_file_id), str(box_file_name)]
+
+    if hasattr(contract, "encodeABI"):
+        return contract.encodeABI(fn_name="recordOrUpdate", args=args)
+    return contract.encode_abi("recordOrUpdate", args=args)
 
 @dataclass(frozen=True)
 class EthConfig:
@@ -187,9 +204,13 @@ class EthereumClient:
                         continue
                     raise
 
-            receipt = self._w3.eth.wait_for_transaction_receipt(tx_hash)
+            timeout_s = int(os.getenv("ETH_TX_RECEIPT_TIMEOUT", "20"))
+            try:
+                receipt = self._w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout_s)
+                txh = receipt.transactionHash.hex()
+            except TimeExhausted:
+                txh = tx_hash.hex()
 
-        txh = receipt.transactionHash.hex()
         if not txh.startswith("0x"):
             txh = "0x" + txh
         return txh

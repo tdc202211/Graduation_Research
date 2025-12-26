@@ -2,21 +2,254 @@
 
 {% block content %}
 <h1>ファイル詳細</h1>
-<p>File ID: <strong>{{ file_id }}</strong></p>
 
 {% if chain_error %}
 <p class="error">取得に失敗しました: {{ chain_error }}</p>
 {% endif %}
+
+{% set detail_contract = {"contractAddress": contract_address or ""} %}
+{% set detail_call = {"function": "getLatest", "args": [file_id]} %}
+{% set detail_file_id = {"fileId": file_id} %}
+{% set detail_output = record if record else {"exists": False} %}
+{% set contract_address_note = "【目的】\n参照対象となるスマートコントラクトを一意に特定し、以降のRPC呼び出し（eth_call など）の宛先（to）として使用する。"
+  ~ "\n\n【フィールドの意味】\n・contractAddress：EVM上のコントラクトアカウントのアドレス（20byte）。このアドレスで「どのコントラクトのstorage / 関数」を参照するかが決まる。"
+  ~ "\n\n【補足】\n・ローカルHardhat環境ではデプロイのたびにアドレスが変わる可能性があるため、参照処理では“最新のデプロイ先アドレス”を用いる必要がある。"
+%}
+{% set contract_call_note = "【目的】\n参照（read）として呼び出すコントラクト関数と、その入力引数を確定する。以降はABIに基づいてcalldataを生成し、eth_callで実行して戻り値を取得する。"
+  ~ "\n\n【フィールドの意味】\n・function：呼び出す関数名。ここでは getLatest を指定し、コントラクトが保持する「fileIdに対応する最新レコード」を取得する想定。"
+  ~ "\n・args：関数に渡す引数の配列。getLatest の第1引数として fileId=\"2079866414120\" を渡す。"
+  ~ "\n\n【補足】\n・参照処理では通常 eth_call を用いるため、stateは更新されずトランザクションも発生しない（= 署名やガス消費は原則不要）。"
+  ~ "\n・args が数値に見えてもIDなので、ABI定義が string の場合は文字列として渡す（型はABIに一致させることが重要）。"
+%}
+{% set file_id_note = "【目的】\nコントラクト側の検索キーとして fileId を指定し、mapping 等から該当レコードを参照できる状態にする。"
+  ~ "\n\n【フィールドの意味】\n・fileId：外部ストレージ（例：Box）のファイルを一意に識別するID。オンチェーンでは mapping のキー（もしくは keccak256(fileId) で導出した固定長キー）として使用され、同じfileIdを指定することで保存済みレコードを再取得できる。"
+  ~ "\n\n【補足】\n・数値に見えても識別子なので、運用上は string として保持するのが安全（桁あふれや形式変更に強い）。"
+  ~ "\n・参照時はABI定義（string / bytes32 など）に型を合わせて渡す必要がある。"
+%}
+{% set output_note = "【目的】\ngetLatest(fileId) の参照結果として、該当レコードの有無と保存済みメタデータを取得し、オフチェーン側で整合性検証（ハッシュ一致確認）に利用できる形で出力する。"
+  ~ "\n\n【各フィールドの意味（由来）】\n・exists：指定したfileIdのレコードがコントラクト上に存在するか（bool）。未登録の場合は false となり、他フィールドはデフォルト値になり得る。"
+  ~ "\n・fileHash：オンチェーンに保存されているファイル内容ハッシュ（bytes32相当）。オフチェーンで再計算したSHA-256と一致すれば「内容が同一」と判断できる。"
+  ~ "\n・fileId：検索に用いた識別子。参照結果がどのキーに対応するかを明示するために出力に含める。"
+  ~ "\n・fileName：保存時点の表示名（string）。検証の必須要素ではなく、可読性・追跡性のための補助情報。"
+  ~ "\n・updatedAt：保存時の更新時刻。コントラクト側で保持している Unix timestamp（例：block.timestamp）を、クライアント側でISO 8601（JST）に整形して出力している。"
+  ~ "\n\n【検証での使い方】\nexists=true を確認した上で、対象ファイルから算出したhashと fileHash を比較することで改ざん検知が可能。"
+%}
+{% set output_json = detail_output | tojson(indent=2) %}
+
+<div class="flow-section">
+  <div class="flow-layout is-split" data-flow-layout>
+    <div class="flow-left">
+      <div class="flow-board">
+        <div class="flow-column">
+          <div class="flow-column-header flow-node" style="--delay: 0s;"
+            data-title="ブロックチェーン"
+            data-beginner="ここからはネットワーク側の処理です。"
+            data-advanced="スマートコントラクトに問い合わせます。">ブロックチェーン</div>
+          <div class="flow-step flow-node" style="--delay: 3s;"
+            data-title="コントラクトアドレスを指定"
+            data-beginner="倉庫の場所（住所）を指定する"
+            data-advanced='{{ "【データ構造】\\n" ~ (detail_contract | tojson(indent=2)) }}'
+            data-advanced-note='{{ contract_address_note | e }}'
+            data-stage-items="contractAddress"
+            data-stage-target="chain">コントラクトアドレスを指定</div>
+          <div class="flow-step flow-node" style="--delay: 6s;"
+            data-title="コントラクト（関数）を指定"
+            data-beginner="どの窓口（関数）に問い合わせるか決める"
+            data-advanced='{{ "【データ構造】\\n" ~ (detail_call | tojson(indent=2)) }}'
+            data-advanced-note='{{ contract_call_note | e }}'
+            data-stage-items="function,args"
+            data-stage-target="chain">コントラクトを指定</div>
+          <div class="flow-step flow-node" style="--delay: 9s;"
+            data-title="File IDを指定"
+            data-beginner="探したい荷物の番号を伝える"
+            data-advanced='{{ "【データ構造】\\n" ~ (detail_file_id | tojson(indent=2)) }}'
+            data-advanced-note='{{ file_id_note | e }}'
+            data-stage-items="fileId"
+            data-stage-target="chain">File IDを指定</div>
+          <div class="flow-step flow-node flow-node-last" style="--delay: 12s;"
+            data-title="データを出力"
+            data-beginner="該当する荷物の情報が返ってくる"
+            data-advanced='{{ "【データ構造】\\n" ~ output_json }}'
+            data-advanced-note='{{ output_note | e }}'
+            data-stage-items="exists,fileHash,fileName,updatedAt"
+            data-stage-target="chain">データを出力</div>
+        </div>
+      </div>
+    </div>
+    <div class="flow-stage" data-flow-stage>
+      <div class="flow-stage-panel" data-flow-stage-local>
+        <div class="flow-stage-label">ローカル</div>
+        <div class="flow-stage-card" data-flow-stage-card>
+          <div class="flow-stage-title" data-flow-stage-title>ローカル</div>
+          <ul class="flow-stage-list" data-flow-stage-list></ul>
+        </div>
+        <div class="flow-stage-placeholder" data-flow-stage-placeholder>
+          <svg viewBox="0 0 200 240" role="img" aria-label="file icon">
+            <path d="M40 20h80l40 40v160H40z" fill="none" stroke="#111" stroke-width="6"/>
+            <path d="M120 20v40h40" fill="none" stroke="#111" stroke-width="6"/>
+            <path d="M60 100h80M60 130h80M60 160h80" fill="none" stroke="#111" stroke-width="6" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+      <div class="flow-stage-panel" data-flow-stage-chain>
+        <div class="flow-stage-label">ブロックチェーン</div>
+        <div class="flow-stage-card" data-flow-stage-card-chain>
+          <div class="flow-stage-title" data-flow-stage-title-chain>ブロックチェーン</div>
+          <ul class="flow-stage-list" data-flow-stage-list-chain></ul>
+        </div>
+        <div class="flow-stage-placeholder" data-flow-stage-placeholder-chain>
+          <svg viewBox="0 0 200 240" role="img" aria-label="file icon">
+            <path d="M40 20h80l40 40v160H40z" fill="none" stroke="#111" stroke-width="6"/>
+            <path d="M120 20v40h40" fill="none" stroke="#111" stroke-width="6"/>
+            <path d="M60 100h80M60 130h80M60 160h80" fill="none" stroke="#111" stroke-width="6" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 {% if record %}
 <ul>
     <li>ファイル名: {{ record.fileName or "-" }}</li>
     <li>ファイルハッシュ: <span style="font-family: monospace;">{{ record.fileHash or "-" }}</span></li>
     <li>最終更新 (JST): {{ record.updatedAt or "-" }}</li>
+    <li>File ID: {{ record.fileId or file_id }}</li>
 </ul>
 {% else %}
 <p>該当するレコードが見つかりませんでした。</p>
 {% endif %}
 
 <p><a href="{{ url_for('records') }}" class="btn btn-secondary">一覧へ戻る</a></p>
+
+<div class="flow-modal-overlay" data-flow-modal-overlay>
+  <div class="flow-modal" role="dialog" aria-modal="true" aria-labelledby="flow-modal-title">
+    <div class="flow-modal-header">
+      <div class="flow-modal-title" id="flow-modal-title"></div>
+      <button class="flow-modal-close" type="button" data-flow-modal-close>閉じる</button>
+    </div>
+    <div class="flow-modal-body">
+      <div class="flow-modal-box" data-flow-modal-beginner></div>
+      <div class="flow-modal-box flow-modal-code" data-flow-modal-advanced></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const layout = document.querySelector("[data-flow-layout]");
+    if (!layout) return;
+
+    const steps = Array.from(layout.querySelectorAll(".flow-step"));
+    const modalOverlay = document.querySelector("[data-flow-modal-overlay]");
+    const modalTitle = document.querySelector("[data-flow-modal-title]");
+    const modalBeginner = document.querySelector("[data-flow-modal-beginner]");
+    const modalAdvanced = document.querySelector("[data-flow-modal-advanced]");
+    const modalClose = document.querySelector("[data-flow-modal-close]");
+    const stageCard = document.querySelector("[data-flow-stage-card]");
+    const stageTitle = document.querySelector("[data-flow-stage-title]");
+    const stageList = document.querySelector("[data-flow-stage-list]");
+    const stagePlaceholder = document.querySelector("[data-flow-stage-placeholder]");
+    const stageCardChain = document.querySelector("[data-flow-stage-card-chain]");
+    const stageTitleChain = document.querySelector("[data-flow-stage-title-chain]");
+    const stageListChain = document.querySelector("[data-flow-stage-list-chain]");
+    const stagePlaceholderChain = document.querySelector("[data-flow-stage-placeholder-chain]");
+
+    const buildStage = (step) => {
+      const title = step.dataset.title || step.textContent || "";
+      const items = (step.dataset.stageItems || "")
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean);
+      const target = step.dataset.stageTarget || "local";
+      if (target === "chain") {
+        if (!stageCardChain || !stageTitleChain || !stageListChain) return;
+        stageTitleChain.textContent = title;
+        stageListChain.innerHTML = "";
+        items.forEach((item) => {
+          const li = document.createElement("li");
+          li.textContent = item;
+          stageListChain.appendChild(li);
+        });
+        stageCardChain.classList.remove("is-visible");
+        void stageCardChain.offsetWidth;
+        stageCardChain.classList.add("is-visible");
+      } else {
+        if (!stageCard || !stageTitle || !stageList) return;
+        stageTitle.textContent = title;
+        stageList.innerHTML = "";
+        items.forEach((item) => {
+          const li = document.createElement("li");
+          li.textContent = item;
+          stageList.appendChild(li);
+        });
+        stageCard.classList.remove("is-visible");
+        void stageCard.offsetWidth;
+        stageCard.classList.add("is-visible");
+      }
+    };
+
+    const openModal = (step) => {
+      steps.forEach((s) => s.classList.remove("is-active"));
+      step.classList.add("is-active");
+      if (modalTitle) modalTitle.textContent = step.dataset.title || step.textContent || "";
+      if (modalBeginner) modalBeginner.textContent = step.dataset.beginner || "";
+      if (modalAdvanced) {
+        const note = step.dataset.advancedNote;
+        const base = step.dataset.advanced || "";
+        modalAdvanced.innerHTML = note ? `${base}\n\n${note}` : base;
+      }
+      if (modalOverlay) modalOverlay.classList.add("is-open");
+      buildStage(step);
+    };
+
+    const closeModal = () => {
+      if (modalOverlay) modalOverlay.classList.remove("is-open");
+    };
+
+    const parseSeconds = (value) => {
+      if (!value) return 0;
+      if (value.endsWith("ms")) return parseFloat(value) / 1000;
+      return parseFloat(value);
+    };
+
+    if (steps.length > 0) {
+      steps.forEach((step) => step.addEventListener("click", () => openModal(step)));
+      let activeHighlight = null;
+      const setHighlight = (step) => {
+        if (activeHighlight) {
+          activeHighlight.classList.remove("is-animating");
+          activeHighlight.style.borderColor = "";
+          activeHighlight.style.borderWidth = "";
+        }
+        activeHighlight = step;
+        step.classList.add("is-animating");
+        step.style.borderColor = "#e04b3f";
+        step.style.borderWidth = "6px";
+      };
+      steps.forEach((step) => {
+        if (!step.dataset.stageItems) return;
+        const styles = getComputedStyle(step);
+        const delay = parseSeconds(styles.animationDelay);
+        const duration = parseSeconds(styles.animationDuration);
+        const startMs = delay * 1000;
+        const endMs = (delay + duration) * 1000;
+        setTimeout(() => setHighlight(step), startMs);
+        setTimeout(() => {
+          buildStage(step);
+        }, endMs);
+      });
+    }
+
+    if (modalClose) modalClose.addEventListener("click", closeModal);
+    if (modalOverlay) {
+      modalOverlay.addEventListener("click", (event) => {
+        if (event.target === modalOverlay) closeModal();
+      });
+    }
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeModal();
+    });
+  })();
+</script>
 {% endblock %}
