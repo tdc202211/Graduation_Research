@@ -1,5 +1,6 @@
 # encode_data.py
 import json
+import os
 import sys
 from pathlib import Path
 from web3 import Web3
@@ -8,10 +9,10 @@ MIN_ABI = [
     {
         "inputs": [
             {"internalType": "bytes32", "name": "fileHash", "type": "bytes32"},
-            {"internalType": "string", "name": "boxUrl", "type": "string"},
+            {"internalType": "string", "name": "fileId", "type": "string"},
             {"internalType": "string", "name": "fileName", "type": "string"},
         ],
-        "name": "recordFile",
+        "name": "recordOrUpdate",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function",
@@ -34,9 +35,9 @@ def main() -> int:
 
     file_hash32 = sha256_hex_to_bytes32(payload["fileHash"])
 
-    # コントラクト側が boxUrl(string) を受ける想定なので、とりあえず fileId をそのまま入れる
-    box_url = str(payload.get("fileId") or payload.get("boxFileId") or payload.get("boxUrl") or "")
-    if not box_url:
+    # コントラクト側が fileId(string) を受ける想定なので、とりあえず fileId をそのまま入れる
+    file_id = str(payload.get("fileId") or payload.get("boxFileId") or payload.get("boxUrl") or "")
+    if not file_id:
         raise KeyError("fileId (or boxFileId/boxUrl) is missing in payload")
 
     file_name = str(payload["fileName"])
@@ -47,13 +48,14 @@ def main() -> int:
         abi=MIN_ABI
     )
 
-    args = [file_hash32, box_url, file_name]
+    fn_name = os.getenv("ETH_FUNCTION_NAME", "recordOrUpdate")
+    args = [file_hash32, file_id, file_name]
 
     # web3.py v5系: encodeABI / v6+系: encode_abi
     if hasattr(contract, "encodeABI"):
-        data = contract.encodeABI(fn_name="recordFile", args=args)
+        data = contract.encodeABI(fn_name=fn_name, args=args)
     else:
-        data = contract.encode_abi("recordFile", args=args)
+        data = contract.encode_abi(fn_name, args=args)
 
     print(data)
     return 0

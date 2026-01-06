@@ -1,5 +1,7 @@
 # encode_latest_payload.py
 import json
+import os
+import sys
 from pathlib import Path
 from web3 import Web3
 
@@ -26,7 +28,10 @@ def sha256_hex_to_bytes32(file_hash_hex: str) -> bytes:
 
 
 def main() -> int:
-    payload_path = Path(__file__).resolve().parent / "payloads" / "latest.json"
+    if len(sys.argv) > 1:
+        payload_path = Path(sys.argv[1])
+    else:
+        payload_path = Path(__file__).resolve().parent / "payloads" / "latest.json"
     payload = json.loads(payload_path.read_text(encoding="utf-8"))
 
     file_hash32 = sha256_hex_to_bytes32(payload["fileHash"])
@@ -35,6 +40,7 @@ def main() -> int:
         raise KeyError("fileId is missing in payload")
     file_name = str(payload["fileName"])
 
+    fn_name = os.getenv("ETH_FUNCTION_NAME", "recordOrUpdate")
     w3 = Web3()
     contract = w3.eth.contract(
         address="0x0000000000000000000000000000000000000000",
@@ -44,9 +50,9 @@ def main() -> int:
     args = [file_hash32, file_id, file_name]
 
     if hasattr(contract, "encodeABI"):
-        data = contract.encodeABI(fn_name="recordOrUpdate", args=args)
+        data = contract.encodeABI(fn_name=fn_name, args=args)
     else:
-        data = contract.encode_abi("recordOrUpdate", args=args)
+        data = contract.encode_abi(fn_name, args=args)
 
     print("data={")
     print(data)

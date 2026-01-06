@@ -8,6 +8,7 @@ from typing import Optional
 from datetime import datetime, timezone, timedelta
 
 from dotenv import load_dotenv
+from models import FileMetadata
 from web3 import Web3
 from web3.exceptions import TimeExhausted
 
@@ -141,10 +142,10 @@ class EthereumClient:
 
     def store_file_record(self, file_hash: str, box_file_id: str, box_file_name: str) -> str:
         """
-        Solidity: recordFile(bytes32 fileHash, string boxUrl, string fileName)
+        Solidity: recordOrUpdate(bytes32 fileHash, string fileId, string fileName)
 
         NOTE:
-          この実装では、boxUrl に Box の file_id を入れている（URLが必要なら shared link を作って渡す）。
+          この実装では、fileId に Box の file_id を入れている（URLが必要なら shared link を作って渡す）。
         """
         file_hash32 = self._sha256_hex_to_bytes32(file_hash)
 
@@ -214,6 +215,13 @@ class EthereumClient:
         if not txh.startswith("0x"):
             txh = "0x" + txh
         return txh
+
+    def register_file(self, meta: FileMetadata) -> str:
+        return self.store_file_record(
+            file_hash=meta.file_hash,
+            box_file_id=meta.box_file_id,
+            box_file_name=meta.box_file_name,
+        )
 
     def get_latest(self, box_file_id: str) -> dict:
         file_hash, file_name, updated_at, exists = (

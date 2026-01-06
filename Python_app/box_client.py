@@ -1,9 +1,12 @@
 import hashlib
+from pathlib import Path
 from boxsdk.exception import BoxAPIException
 
 
 class BoxUploader:
-    def __init__(self, client, default_folder_id="0"):
+    def __init__(self, client, default_folder_id="0", parent_folder_id=None):
+        if parent_folder_id is not None:
+            default_folder_id = parent_folder_id
         self._client = client
         self._default_folder_id = str(default_folder_id)
 
@@ -16,7 +19,7 @@ class BoxUploader:
     def upload_file(self, file_storage):
         """
         Args:
-            file_storage: Flaskの request.files["file"] の FileStorage
+            file_storage: Flaskの request.files["file"] の FileStorage または ローカルパス
 
         Returns:
             (uploaded_file, conflict_info, file_hash)
@@ -24,11 +27,17 @@ class BoxUploader:
             - conflict_info: 409時のconflict情報（なければNone）
             - file_hash: アップロード内容のSHA-256(hex)
         """
-        filename = file_storage.filename
-
-        # FileStorageはstreamを持つ。内容をbytesとして読み切ってhash計算し、
-        # そのbytesでBoxへアップロードする（確実に同じ内容をhashとアップロードに使う）
-        data = file_storage.read()
+        if hasattr(file_storage, "read") and hasattr(file_storage, "filename"):
+            filename = file_storage.filename
+            # FileStorageはstreamを持つ。内容をbytesとして読み切ってhash計算し、
+            # そのbytesでBoxへアップロードする（確実に同じ内容をhashとアップロードに使う）
+            data = file_storage.read()
+        else:
+            path = Path(file_storage)
+            filename = path.name
+            data = path.read_bytes()
+        if not filename:
+            raise ValueError("filename is empty")
         file_hash = self._sha256_bytes(data)
 
         # BoxSDKはストリームが必要なので、bytesをmemoryview/bytesで渡せる stream を作る

@@ -164,6 +164,7 @@
             border-radius: 10px;
             box-sizing: border-box;
             max-width: calc(70% - 24px);
+            position: relative;
         }
 
         .flow-stage-wrap {
@@ -205,17 +206,17 @@
             border-radius: 6px;
             text-align: center;
             font-weight: 700;
-            padding: 10px 12px;
+            padding: clamp(6px, 1.6vw, 10px) clamp(8px, 2vw, 12px);
         }
 
         .flow-stage-card {
-            min-width: 280px;
-            max-width: 420px;
+            min-width: min(70%, 240px);
+            max-width: min(90%, 420px);
             background: #0f4c5c;
             color: #fff;
             border: 2px solid #0a3743;
             border-radius: 6px;
-            padding: 14px 16px;
+            padding: clamp(10px, 2.4vw, 14px) clamp(12px, 3vw, 16px);
             box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
             opacity: 0;
             transform: translate(-50%, -50%) scale(0.98);
@@ -230,6 +231,15 @@
         .flow-stage-card.is-encode {
             top: calc(50% - 8px);
             transition: none;
+        }
+
+        .flow-stage-card.is-transaction {
+            top: calc(50% + 16px);
+            transition: none;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            padding: 0;
         }
 
         .flow-stage-card.is-extract {
@@ -255,13 +265,13 @@
 
         .flow-stage-title {
             font-weight: 700;
-            margin-bottom: 10px;
-            font-size: 16px;
+            margin-bottom: clamp(6px, 1.6vw, 10px);
+            font-size: clamp(13px, 2.4vw, 16px);
         }
 
         .flow-stage-list {
             margin: 0;
-            padding-left: 18px;
+            padding-left: clamp(14px, 2.6vw, 18px);
             line-height: 1.7;
         }
 
@@ -277,14 +287,14 @@
             color: #fff;
             border: 2px solid #0a3743;
             border-radius: 6px;
-            padding: 12px 14px;
+            padding: clamp(8px, 2.2vw, 12px) clamp(10px, 2.8vw, 14px);
             box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
         }
 
         .flow-stage-block-title {
             font-weight: 700;
-            margin-bottom: 8px;
-            font-size: 15px;
+            margin-bottom: clamp(4px, 1.6vw, 8px);
+            font-size: clamp(12px, 2.2vw, 15px);
         }
 
         .flow-stage-arrow {
@@ -298,7 +308,7 @@
         .flow-stage-reveal {
             opacity: 0;
             transform: translateY(-4px);
-            transition: opacity 2.4s ease, transform 2.4s ease;
+            transition: opacity 3s ease, transform 3s ease;
             visibility: hidden;
         }
 
@@ -314,13 +324,379 @@
             visibility: hidden;
         }
 
+        .flow-transaction {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .flow-transaction-bytes {
+            background: #0f4c5c;
+            color: #fff;
+            border: 2px solid #0a3743;
+            border-radius: 6px;
+            padding: clamp(8px, 2.2vw, 12px) clamp(10px, 2.8vw, 14px);
+            text-align: center;
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
+            transition: transform 3s ease, opacity 3s ease;
+            transform: translateY(0);
+            position: relative;
+            z-index: 2;
+        }
+
+        .flow-transaction-bytes.is-merging {
+            transform: translateY(var(--merge-offset, 0px));
+        }
+
+        .flow-transaction-reveal {
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-4px);
+            transition: opacity 3s ease, transform 3s ease;
+        }
+
+        .flow-transaction-reveal.is-visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .flow-transaction-box {
+            background: #0f4c5c;
+            color: #fff;
+            border: 2px solid #0a3743;
+            border-radius: 6px;
+            padding: clamp(8px, 2.2vw, 12px) clamp(10px, 2.8vw, 14px);
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
+            position: relative;
+            z-index: 1;
+        }
+
+        .flow-transaction-title {
+            font-weight: 700;
+            margin-bottom: clamp(4px, 1.6vw, 8px);
+            font-size: clamp(12px, 2.2vw, 15px);
+        }
+
+        .flow-transaction-slot {
+            margin-top: clamp(6px, 1.6vw, 10px);
+            padding: clamp(6px, 1.8vw, 8px) clamp(8px, 2vw, 10px);
+            border: 1px dashed rgba(255, 255, 255, 0.6);
+            border-radius: 6px;
+            text-align: center;
+            font-size: clamp(11px, 2vw, 13px);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .flow-signature-reveal {
+            opacity: 1;
+            visibility: visible;
+            transform: none;
+            transition: none;
+            position: relative;
+            z-index: 3;
+        }
+
+        .flow-signature-reveal.is-visible {
+            opacity: 1;
+            visibility: visible;
+            transform: none;
+        }
+
+        .flow-signature-box {
+            background: #0f4c5c;
+            color: #fff;
+            border: 2px solid #0a3743;
+            border-radius: 6px;
+            padding: clamp(8px, 2.2vw, 12px) clamp(10px, 2.8vw, 14px);
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
+        }
+
+        .flow-signature-block {
+            background: #0f4c5c;
+            color: #fff;
+            border: 2px solid #0a3743;
+            border-radius: 6px;
+            padding: clamp(8px, 2.2vw, 12px) clamp(10px, 2.8vw, 14px);
+            text-align: center;
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
+            transition: transform 3s ease;
+            transform: translateY(0);
+            position: relative;
+            z-index: 3;
+        }
+
+        .flow-signature-block.is-merging {
+            transform: translateY(var(--merge-offset, 0px));
+        }
+
+        .flow-signature-block.is-moving {
+            transform: translateY(var(--merge-offset, 0px));
+        }
+
+        .flow-send-box {
+            position: absolute;
+            background: #0f4c5c;
+            color: #fff;
+            border: 2px solid #0a3743;
+            border-radius: 6px;
+            padding: clamp(8px, 2.2vw, 12px) clamp(10px, 2.8vw, 14px);
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
+            width: 35%;
+            max-width: 35%;
+            min-width: 0;
+            transition: transform 3s ease;
+            transform: translate(0, 0);
+            z-index: 4;
+        }
+
+        .flow-send-box.is-moving {
+            transform: translate(var(--move-x, 0px), var(--move-y, 0px));
+        }
+
+        .flow-storage {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .flow-storage-transaction {
+            background: #0f4c5c;
+            color: #fff;
+            border: 2px solid #0a3743;
+            border-radius: 6px;
+            padding: clamp(8px, 2.2vw, 12px) clamp(10px, 2.8vw, 14px);
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
+            transition: transform 3s ease;
+            transform: translateY(0);
+            position: relative;
+            z-index: 2;
+        }
+
+        .flow-storage-transaction.is-merging {
+            transform: translateY(var(--merge-offset, 0px));
+        }
+
+        .flow-storage-box {
+            background: #0f4c5c;
+            color: #fff;
+            border: 2px solid #0a3743;
+            border-radius: 6px;
+            padding: clamp(8px, 2.2vw, 12px) clamp(10px, 2.8vw, 14px) clamp(4px, 1.4vw, 6px);
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
+            min-height: clamp(140px, 32vw, 200px);
+        }
+
+        .flow-storage-slot {
+            min-height: clamp(80px, 20vw, 115px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(12px, 2.2vw, 14px);
+        }
+
         .flow-stage-card.is-stack > .flow-stage-title,
         .flow-stage-card.is-stack > .flow-stage-list {
             display: none;
         }
 
+        .flow-stage-card.is-transaction > .flow-stage-title,
+        .flow-stage-card.is-transaction > .flow-stage-list {
+            display: none;
+        }
+
         .flow-stage-card.is-stack .flow-stage-stack {
             display: flex;
+        }
+
+        .flow-stage-card.is-chain-map .flow-stage-list {
+            display: none;
+        }
+
+        .flow-stage-card.is-chain-map {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            padding: 0;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+        }
+
+        .flow-stage-card.is-chain-map .flow-stage-title {
+            display: none;
+        }
+
+
+        .flow-chain {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: clamp(12px, 3vw, 18px);
+            width: 100%;
+            padding: clamp(2px, 1vw, 4px) 0 clamp(6px, 2vw, 10px);
+            margin-top: clamp(28px, 6vw, 50px);
+        }
+
+        .flow-chain-track {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: clamp(16px, 4vw, 30px);
+            padding: clamp(4px, 1.5vw, 6px) 0;
+            width: min(320px, 80%);
+        }
+
+        .flow-chain-track::before {
+            content: "";
+            position: absolute;
+            top: clamp(-12px, -2.5vw, -16px);
+            bottom: clamp(-6px, -1.5vw, -6px);
+            width: min(4px, 1.2%);
+            border-radius: 999px;
+            background: #0f4c5c;
+        }
+
+        .flow-chain-block {
+            width: min(72px, 22%);
+            height: auto;
+            aspect-ratio: 9 / 7;
+            border: clamp(1px, 0.5vw, 2px) solid #111;
+            border-radius: clamp(1px, 0.4vw, 2px);
+            background: #fff;
+            opacity: 1;
+            transition: transform 0.6s ease, box-shadow 0.6s ease, opacity 0.6s ease, border-color 0.6s ease;
+            z-index: 1;
+        }
+
+        .flow-chain-block.is-large {
+            width: min(360px, 85%);
+            height: auto;
+            aspect-ratio: 6 / 5;
+            max-height: min(250px, 70%);
+        }
+
+        .flow-chain-block.is-large .flow-chain-block-content {
+            font-size: clamp(14px, 2.1vw, 17px);
+            line-height: 2.2;
+            color: #0f4c5c;
+            padding: clamp(12px, 2.5vw, 18px) clamp(12px, 3vw, 20px);
+            text-align: left;
+        }
+
+        .flow-chain-block.is-large.flow-contract .flow-chain-block-list {
+            margin: 0;
+            --flow-list-indent: clamp(0.9em, 2vw, 1.4em);
+            padding-left: var(--flow-list-indent);
+        }
+
+        .flow-chain-block.is-large.flow-file-id .flow-chain-block-list {
+            margin: 0;
+            --flow-list-indent: clamp(2.4em, 6vw, 3.2em);
+            padding-left: var(--flow-list-indent);
+        }
+
+        .flow-chain-block.is-large .flow-chain-block-content > div {
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .flow-chain-block.is-large .flow-chain-block-list li {
+            margin: clamp(3px, 1vw, 6px) 0;
+        }
+
+        .flow-chain-block.is-large .flow-chain-block-list li.is-highlight {
+            position: relative;
+        }
+
+        .flow-chain-block.is-large .flow-chain-block-list li.is-highlight::before {
+            content: "";
+            position: absolute;
+            left: calc(-1 * var(--flow-list-indent, 2.2em));
+            right: -0.8em;
+            top: -0.2em;
+            bottom: -0.2em;
+            border: clamp(1px, 0.4vw, 2px) solid #c1121f;
+            border-radius: clamp(4px, 1.2vw, 6px);
+            pointer-events: none;
+            animation: listBlinkBorder 1.2s ease-in-out infinite;
+        }
+
+        @keyframes listBlinkBorder {
+            0%,
+            100% {
+                border-color: #c1121f;
+            }
+            50% {
+                border-color: transparent;
+            }
+        }
+
+        .flow-chain-block.is-highlight {
+            opacity: 1;
+            border-color: #0f4c5c;
+            box-shadow: 0 clamp(6px, 2vw, 10px) clamp(10px, 3vw, 18px) rgba(15, 76, 92, 0.2);
+        }
+
+        .flow-chain-block.is-alert {
+            border-color: #111;
+            box-shadow: 0 0 0 clamp(2px, 1vw, 4px) rgba(193, 18, 31, 0.6);
+            animation: chainBlink 1.2s ease-in-out infinite;
+        }
+
+        .flow-output-wrapper {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 3;
+            margin-top: clamp(16px, 4vw, 40px);
+            transform: translateX(0);
+            transition: transform 1.6s ease;
+        }
+
+        .flow-output-wrapper.is-shifted {
+            transform: translateX(calc(var(--output-shift-pct, 0) * 1%));
+        }
+
+        .flow-output-card {
+            width: min(320px, 80%);
+            background: #0f4c5c;
+            color: #fff;
+            border: 2px solid #0a3743;
+            border-radius: clamp(6px, 1.8vw, 8px);
+            padding: clamp(10px, 2vw, 14px) clamp(10px, 2.5vw, 16px);
+            box-shadow: 0 clamp(6px, 2vw, 10px) clamp(10px, 3vw, 18px) rgba(0, 0, 0, 0.12);
+            opacity: 0;
+            transform: translateY(clamp(4px, 1.5vw, 6px));
+            transition: opacity 1.6s ease, transform 1.6s ease;
+        }
+
+        .flow-output-card.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .flow-output-card-list {
+            margin: 0;
+            padding-left: clamp(16px, 3vw, 20px);
+            line-height: 1.7;
+            font-size: clamp(13px, 2vw, 15px);
+        }
+
+        @keyframes chainBlink {
+            0%,
+            100% {
+                box-shadow: 0 0 0 4px rgba(193, 18, 31, 0.6);
+            }
+            50% {
+                box-shadow: 0 0 0 0 rgba(193, 18, 31, 0);
+            }
         }
 
         .flow-stage-placeholder {
@@ -474,7 +850,6 @@
         }
 
         .flow-node {
-            --flow-duration: 1.2s;
             position: relative;
             text-align: center;
             box-sizing: border-box;

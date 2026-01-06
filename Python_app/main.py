@@ -26,13 +26,12 @@ def create_box_client() -> Client:
 
 def main():
     box_client = create_box_client()
-    box_uploader = BoxUploader(box_client, parent_folder_id="0")
+    box_uploader = BoxUploader(box_client)
 
     eth_client = EthereumClient(
         rpc_url=os.getenv("ETH_RPC_URL"),
         private_key=os.getenv("ETH_PRIVATE_KEY"),
         contract_address=os.getenv("ETH_CONTRACT_ADDRESS"),
-        abi_path=os.getenv("ETH_CONTRACT_ABI_PATH"),
     )
 
     registrar = FileRegistrar(box_uploader, eth_client)

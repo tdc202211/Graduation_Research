@@ -1,8 +1,12 @@
 from flask import Flask, redirect, request, session, url_for, render_template, jsonify
+import logging
 from boxsdk import OAuth2, Client
 from dotenv import load_dotenv
 import os
 import json
+import secrets
+import threading
+import time
 from datetime import datetime, timezone, timedelta
 import subprocess
 import sys
@@ -12,24 +16,110 @@ from urllib.parse import urlencode
 from box_client import BoxUploader
 from eth_client import EthereumClient
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(dotenv_path=BASE_DIR / ".env")
 
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "change-this-to-some-random-long-string")
+logging.getLogger("boxsdk").setLevel(logging.ERROR)
+logging.getLogger("boxsdk.network").setLevel(logging.ERROR)
+logging.getLogger("boxsdk.network.default_network").setLevel(logging.ERROR)
+logging.getLogger("urllib3").setLevel(logging.ERROR)
+_flask_secret = os.getenv("FLASK_SECRET_KEY")
+if not _flask_secret:
+    raise RuntimeError("FLASK_SECRET_KEY is not set")
+app.secret_key = _flask_secret
 
 BOX_CLIENT_ID = os.getenv("BOX_CLIENT_ID")
 BOX_CLIENT_SECRET = os.getenv("BOX_CLIENT_SECRET")
 BOX_REDIRECT_URI = os.getenv("BOX_REDIRECT_URI")
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE=os.getenv("FLASK_COOKIE_SAMESITE", "Lax"),
+    SESSION_COOKIE_SECURE=_env_flag(
+        "FLASK_SECURE_COOKIE", (BOX_REDIRECT_URI or "").startswith("https://")
+    ),
+)
+
+TOKEN_STORE: dict[str, dict[str, str]] = {}
+TOKEN_STORE_LOCK = threading.Lock()
+OAUTH_STATE_TTL = int(os.getenv("OAUTH_STATE_TTL_SECONDS", "600"))
+
+
+def _get_token_key() -> str:
+    token_key = session.get("token_key")
+    if not token_key:
+        token_key = secrets.token_urlsafe(32)
+        session["token_key"] = token_key
+    return token_key
+
+
 def store_tokens(access_token, refresh_token):
-    session["access_token"] = access_token
-    session["refresh_token"] = refresh_token
+    token_key = _get_token_key()
+    with TOKEN_STORE_LOCK:
+        TOKEN_STORE[token_key] = {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "updated_at": int(time.time()),
+        }
+
+
+def _get_tokens():
+    token_key = session.get("token_key")
+    if not token_key:
+        return None
+    with TOKEN_STORE_LOCK:
+        return TOKEN_STORE.get(token_key)
+
+
+def _new_oauth_state() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def _validate_oauth_state(provided: str | None) -> bool:
+    expected = session.get("oauth_state")
+    issued_at = session.get("oauth_state_ts")
+    session.pop("oauth_state", None)
+    session.pop("oauth_state_ts", None)
+    if not expected or not provided:
+        return False
+    if issued_at is None:
+        return False
+    if time.time() - int(issued_at) > OAUTH_STATE_TTL:
+        return False
+    return secrets.compare_digest(provided, expected)
+
+
+def _preview_enabled() -> bool:
+    return _env_flag("ENABLE_TX_PREVIEW", False)
+
+
+def _get_payload_path() -> Path | None:
+    raw = session.get("payload_path")
+    if not raw:
+        latest = Path(__file__).resolve().parent / "payloads" / "latest.json"
+        return latest if latest.exists() else None
+    path = Path(raw)
+    if path.exists():
+        return path
+    latest = Path(__file__).resolve().parent / "payloads" / "latest.json"
+    return latest if latest.exists() else None
 
 
 def build_client():
-    access_token = session.get("access_token")
-    refresh_token = session.get("refresh_token")
+    tokens = _get_tokens()
+    if not tokens:
+        return None
+    access_token = tokens.get("access_token")
+    refresh_token = tokens.get("refresh_token")
     if not access_token:
         return None
 
@@ -57,17 +147,21 @@ def ensure_env():
 
 @app.route("/")
 def index():
-    logged_in = "access_token" in session
+    logged_in = _get_tokens() is not None
     return render_template("index.html", logged_in=logged_in)
 
 
 @app.route("/login")
 def login():
     ensure_env()
+    state = _new_oauth_state()
+    session["oauth_state"] = state
+    session["oauth_state_ts"] = int(time.time())
     params = {
         "response_type": "code",
         "client_id": BOX_CLIENT_ID,
         "redirect_uri": BOX_REDIRECT_URI,
+        "state": state,
     }
     auth_url = "https://account.box.com/api/oauth2/authorize?" + urlencode(params)
     return redirect(auth_url)
@@ -76,6 +170,12 @@ def login():
 @app.route("/callback")
 def callback():
     ensure_env()
+    error = request.args.get("error")
+    if error:
+        return f"Box auth error: {error}", 400
+    state = request.args.get("state")
+    if not _validate_oauth_state(state):
+        return "Invalid OAuth state", 400
     code = request.args.get("code")
     if not code:
         return "No code returned from Box", 400
@@ -86,7 +186,9 @@ def callback():
         store_tokens=store_tokens,
     )
 
-    oauth.authenticate(code)
+    access_token, refresh_token = oauth.authenticate(code)
+    if access_token:
+        store_tokens(access_token, refresh_token)
     return redirect(url_for("me"))
 
 
@@ -107,6 +209,7 @@ def upload():
         return redirect(url_for("login"))
 
     uploader = BoxUploader(client)
+    token_key = _get_token_key()
 
     if request.method == "GET":
         return render_template("upload.html")
@@ -145,22 +248,39 @@ def upload():
     payload_dir.mkdir(parents=True, exist_ok=True)
 
     latest_path = payload_dir / "latest.json"
+    session_payload_path = payload_dir / f"{token_key}.json"
 
-    save_error = None
+    save_errors = []
+    session_payload_error = None
     try:
         with latest_path.open("w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
     except Exception as ex:
-        save_error = f"{type(ex).__name__}: {ex}"
+        save_errors.append(f"latest.json: {type(ex).__name__}: {ex}")
+    try:
+        with session_payload_path.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+    except Exception as ex:
+        session_payload_error = f"{type(ex).__name__}: {ex}"
+        save_errors.append(f"{session_payload_path.name}: {session_payload_error}")
+
+    save_error = "; ".join(save_errors) if save_errors else None
+    if session_payload_error is None:
+        session["payload_path"] = str(session_payload_path)
+    else:
+        session.pop("payload_path", None)
 
     session["last_upload_payload"] = payload
+    payload_path_for_scripts = (
+        session_payload_path if session_payload_error is None else latest_path
+    )
 
     encode_data = None
     encode_error = None
     try:
         script_path = Path(__file__).resolve().parent / "encode_latest_payload.py"
         result = subprocess.run(
-            [sys.executable, str(script_path)],
+            [sys.executable, str(script_path), str(payload_path_for_scripts)],
             capture_output=True,
             text=True,
             check=True,
@@ -181,7 +301,7 @@ def upload():
                 payload["fileId"],
                 "--offline",
                 "--payload",
-                str(latest_path),
+                str(payload_path_for_scripts),
                 "--dump-slots",
                 "4",
             ],
@@ -196,7 +316,7 @@ def upload():
     return render_template(
         "upload_result.html",
         payload=payload,
-        saved_path=str(latest_path),
+        saved_path=str(payload_path_for_scripts),
         save_error=save_error,
         conflict=conflict_info,
         tx_hash=tx_hash,
@@ -259,11 +379,15 @@ def latest_payload():
 
 @app.route("/preview/presign")
 def preview_presign():
-    latest_path = Path(__file__).resolve().parent / "payloads" / "latest.json"
+    if not _preview_enabled():
+        return "preview disabled", 404, {"Content-Type": "text/plain; charset=utf-8"}
+    payload_path = _get_payload_path()
+    if payload_path is None:
+        return "no payload", 404, {"Content-Type": "text/plain; charset=utf-8"}
     script_path = Path(__file__).resolve().parent / "tx_preview_presign.py"
     try:
         result = subprocess.run(
-            [sys.executable, str(script_path), str(latest_path)],
+            [sys.executable, str(script_path), str(payload_path)],
             capture_output=True,
             text=True,
             check=True,
@@ -275,18 +399,22 @@ def preview_presign():
 
 @app.route("/preview/signed")
 def preview_signed():
-    latest_path = Path(__file__).resolve().parent / "payloads" / "latest.json"
+    if not _preview_enabled():
+        return "preview disabled", 404, {"Content-Type": "text/plain; charset=utf-8"}
+    payload_path = _get_payload_path()
+    if payload_path is None:
+        return "no payload", 404, {"Content-Type": "text/plain; charset=utf-8"}
     presign_script = Path(__file__).resolve().parent / "tx_preview_presign.py"
     sign_script = Path(__file__).resolve().parent / "tx_preview_signed.py"
     try:
         presign = subprocess.run(
-            [sys.executable, str(presign_script), str(latest_path)],
+            [sys.executable, str(presign_script), str(payload_path)],
             capture_output=True,
             text=True,
             check=True,
         )
         result = subprocess.run(
-            [sys.executable, str(sign_script), str(latest_path), "--from-presign", "-"],
+            [sys.executable, str(sign_script), str(payload_path), "--from-presign", "-"],
             input=presign.stdout,
             capture_output=True,
             text=True,
@@ -299,9 +427,21 @@ def preview_signed():
 
 @app.route("/logout")
 def logout():
+    payload_path = session.get("payload_path")
+    token_key = session.get("token_key")
     session.clear()
+    if token_key:
+        with TOKEN_STORE_LOCK:
+            TOKEN_STORE.pop(token_key, None)
+    if payload_path:
+        try:
+            Path(payload_path).unlink()
+        except OSError:
+            pass
     return redirect(url_for("index"))
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    debug = _env_flag("FLASK_DEBUG", True)
+    host = os.getenv("FLASK_HOST", "localhost")
+    app.run(debug=debug, host=host, use_reloader=debug)

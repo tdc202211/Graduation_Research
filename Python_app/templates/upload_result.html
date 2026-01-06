@@ -9,7 +9,7 @@
   <div class="flow-section">
     <div class="flow-layout is-split is-static" data-flow-layout>
       <div class="flow-left">
-        <div class="flow-board">
+        <div class="flow-board" style="--flow-duration: 3s;">
           {% set extracted_payload = {
             "fileHash": payload.fileHash,
             "fileId": payload.fileId,
@@ -93,13 +93,13 @@
               data-title="ローカル"
               data-beginner="PC内でファイルを読み取り、送信の準備をする段階です。"
               data-advanced="ローカル環境でハッシュ計算や署名前処理を行います。">ローカル</div>
-            <div class="flow-step flow-node" style="--delay: 3s;"
+            <div class="flow-step flow-node" style="--delay: 0s;"
               data-title="ファイルから情報を抽出"
               data-beginner="配送物を倉庫からピッキングする"
               data-advanced='{{ extracted_advanced | e }}'
               data-stage-items="ファイルハッシュ,ファイル名,ファイルID"
               data-stage-target="local">ファイルから情報を抽出</div>
-            <div class="flow-step flow-node" style="--delay: 6s;"
+            <div class="flow-step flow-node" style="--delay: 0s;"
               data-title="データをエンコード"
               data-beginner="配送物を送れる形に整えて包装する"
               data-advanced='{{ encode_advanced | e }}'
@@ -109,7 +109,7 @@
               data-hide-placeholder="true"
               data-stage-mode="stack"
               data-stage-target="local">データをエンコード</div>
-            <div class="flow-step flow-node" style="--delay: 9s;"
+            <div class="flow-step flow-node" style="--delay: 0s;"
               data-title="トランザクションの作成"
               data-beginner="箱に詰めて、送り先などの伝票を書く"
               data-advanced="読み込み中..."
@@ -117,7 +117,7 @@
               data-preview-url="{{ url_for('preview_presign') }}"
               data-stage-items="from,to,nonce,gas/fee,input"
               data-stage-target="local">トランザクションの作成</div>
-            <div class="flow-step flow-node" style="--delay: 12s;"
+            <div class="flow-step flow-node" style="--delay: 0s;"
               data-title="トランザクションを署名"
               data-beginner="送り主のサインをする（本人確認）"
               data-advanced="読み込み中..."
@@ -125,16 +125,16 @@
               data-preview-url="{{ url_for('preview_signed') }}"
               data-stage-items="署名(v,r,s),txHash"
               data-stage-target="local">トランザクションを署名</div>
-            <div class="flow-step flow-node" style="--delay: 15s;"
+            <div class="flow-step flow-node" style="--delay: 0s;"
               data-title="トランザクションを送信"
               data-beginner="トラックに積み込む"
               data-advanced="なし"
               data-stage-target="chain">トランザクションを送信</div>
-            <div class="flow-column-header flow-node" style="--delay: 18s;"
+            <div class="flow-column-header flow-node" style="--delay: 0s;"
               data-title="ブロックチェーン"
               data-beginner="ここからはネットワーク側の処理です。"
               data-advanced="ブロックに取り込まれて確定していきます。">ブロックチェーン</div>
-            <div class="flow-step flow-node flow-node-last" style="--delay: 21s;"
+            <div class="flow-step flow-node flow-node-last" style="--delay: 0s;"
               data-title="データをストレージに保管"
               data-beginner="包装を解いて家に設置"
               data-advanced='{{ storage_advanced | e }}'
@@ -227,6 +227,7 @@
     const stageTitle = document.querySelector("[data-flow-stage-title]");
     const stageList = document.querySelector("[data-flow-stage-list]");
     const stagePlaceholder = document.querySelector("[data-flow-stage-placeholder]");
+    const stageArea = document.querySelector("[data-flow-stage]");
     const stageCardChain = document.querySelector("[data-flow-stage-card-chain]");
     const stageTitleChain = document.querySelector("[data-flow-stage-title-chain]");
     const stageListChain = document.querySelector("[data-flow-stage-list-chain]");
@@ -252,8 +253,25 @@
       card.classList.remove("is-stack");
       card.classList.remove("is-extract");
       card.classList.remove("is-encode");
+      card.classList.remove("is-transaction");
       title.textContent = "";
       list.innerHTML = "";
+      const transaction = card.querySelector(".flow-transaction");
+      if (transaction) {
+        transaction.innerHTML = "";
+      }
+      const transactionReveal = card.querySelector(".flow-transaction-reveal");
+      if (transactionReveal) {
+        transactionReveal.classList.remove("is-visible");
+      }
+      const bytesBox = card.querySelector(".flow-transaction-bytes");
+      if (bytesBox) {
+        bytesBox.classList.remove("is-merging");
+      }
+      if (stageArea) {
+        const sendBox = stageArea.querySelector(".flow-send-box");
+        if (sendBox) sendBox.remove();
+      }
       card.classList.add("is-hiding");
       card.classList.remove("is-visible");
       void card.offsetWidth;
@@ -288,6 +306,219 @@
         card.appendChild(container);
       }
       return container;
+    };
+
+    const getTransactionContainer = (card) => {
+      let container = card.querySelector(".flow-transaction");
+      if (!container) {
+        container = document.createElement("div");
+        container.className = "flow-transaction";
+        card.appendChild(container);
+      }
+      return container;
+    };
+
+    const renderTransactionStage = ({ target, bytesLabel }) => {
+      const useChain = target === "chain";
+      const card = useChain ? stageCardChain : stageCard;
+      const titleEl = useChain ? stageTitleChain : stageTitle;
+      const listEl = useChain ? stageListChain : stageList;
+      if (!card || !titleEl || !listEl) return;
+      card.classList.remove("is-stack");
+      card.classList.remove("is-extract");
+      card.classList.remove("is-encode");
+      card.classList.add("is-transaction");
+      const container = getTransactionContainer(card);
+      container.innerHTML = "";
+
+      const bytesBox = document.createElement("div");
+      bytesBox.className = "flow-transaction-bytes";
+      bytesBox.textContent = bytesLabel;
+      container.appendChild(bytesBox);
+
+      const arrow = document.createElement("div");
+      arrow.className = "flow-stage-arrow";
+      arrow.textContent = "↓";
+      container.appendChild(arrow);
+
+      const txBox = document.createElement("div");
+      txBox.className = "flow-transaction-box";
+      const txTitle = document.createElement("div");
+      txTitle.className = "flow-transaction-title";
+      txTitle.textContent = "トランザクション";
+      txBox.appendChild(txTitle);
+      const txList = document.createElement("ul");
+      txList.className = "flow-stage-list";
+      const otherItem = document.createElement("li");
+      otherItem.textContent = "その他";
+      txList.appendChild(otherItem);
+      txBox.appendChild(txList);
+      const slot = document.createElement("div");
+      slot.className = "flow-transaction-slot";
+      slot.textContent = bytesLabel;
+      txBox.appendChild(slot);
+      container.appendChild(txBox);
+
+      card.classList.add("is-visible");
+      requestAnimationFrame(() => {
+        const bytesRect = bytesBox.getBoundingClientRect();
+        const slotRect = slot.getBoundingClientRect();
+        const offset = slotRect.top - bytesRect.top;
+        bytesBox.style.setProperty("--merge-offset", `${offset}px`);
+      });
+    };
+
+    const renderSignatureStage = ({ target, showSignature }) => {
+      const useChain = target === "chain";
+      const card = useChain ? stageCardChain : stageCard;
+      const titleEl = useChain ? stageTitleChain : stageTitle;
+      const listEl = useChain ? stageListChain : stageList;
+      if (!card || !titleEl || !listEl) return;
+      card.classList.remove("is-stack");
+      card.classList.remove("is-extract");
+      card.classList.remove("is-encode");
+      card.classList.add("is-transaction");
+      const container = getTransactionContainer(card);
+      container.innerHTML = "";
+
+      const txBox = document.createElement("div");
+      txBox.className = "flow-transaction-box";
+      const txTitle = document.createElement("div");
+      txTitle.className = "flow-transaction-title";
+      txTitle.textContent = "トランザクション";
+      txBox.appendChild(txTitle);
+      const txList = document.createElement("ul");
+      txList.className = "flow-stage-list";
+      const otherItem = document.createElement("li");
+      otherItem.textContent = "その他";
+      txList.appendChild(otherItem);
+      const bytesItem = document.createElement("li");
+      bytesItem.textContent = "バイト列";
+      txList.appendChild(bytesItem);
+      txBox.appendChild(txList);
+      const signSlot = document.createElement("div");
+      signSlot.className = "flow-transaction-slot";
+      signSlot.textContent = "署名";
+      txBox.appendChild(signSlot);
+      container.appendChild(txBox);
+
+      const signReveal = document.createElement("div");
+      signReveal.className = "flow-signature-reveal";
+      if (showSignature) signReveal.classList.add("is-visible");
+      const signArrow = document.createElement("div");
+      signArrow.className = "flow-stage-arrow";
+      signArrow.textContent = "↑";
+      signReveal.appendChild(signArrow);
+      const signBox = document.createElement("div");
+      signBox.className = "flow-signature-block";
+      signBox.textContent = "署名";
+      signReveal.appendChild(signBox);
+      container.appendChild(signReveal);
+
+      card.classList.add("is-visible");
+      requestAnimationFrame(() => {
+        const signRect = signBox.getBoundingClientRect();
+        const slotRect = signSlot.getBoundingClientRect();
+        const offset = slotRect.top - signRect.top;
+        signBox.style.setProperty("--merge-offset", `${offset}px`);
+        signReveal.classList.add("is-visible");
+      });
+    };
+
+    const renderSendStage = ({ fromTarget, toTarget }) => {
+      if (!stageArea) return;
+      const fromPanel = stageArea.querySelector(`[data-flow-stage-${fromTarget}]`);
+      const toPanel = stageArea.querySelector(`[data-flow-stage-${toTarget}]`);
+      if (!fromPanel || !toPanel) return;
+      const existing = stageArea.querySelector(".flow-send-box");
+      if (existing) existing.remove();
+
+      const box = document.createElement("div");
+      box.className = "flow-send-box";
+      const title = document.createElement("div");
+      title.className = "flow-transaction-title";
+      title.textContent = "トランザクション";
+      box.appendChild(title);
+      const list = document.createElement("ul");
+      list.className = "flow-stage-list";
+      const sendItems = ["その他", "バイト列", "署名"];
+      sendItems.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        list.appendChild(li);
+      });
+      box.appendChild(list);
+      stageArea.appendChild(box);
+
+      const areaRect = stageArea.getBoundingClientRect();
+      const fromRect = fromPanel.getBoundingClientRect();
+      const toRect = toPanel.getBoundingClientRect();
+      const startLeft = fromRect.left - areaRect.left + (fromRect.width - box.offsetWidth) / 2;
+      const startTop = fromRect.top - areaRect.top + 72;
+      const endLeft = toRect.left - areaRect.left + (toRect.width - box.offsetWidth) / 2;
+      const endTop = toRect.top - areaRect.top + 72;
+      box.style.left = `${startLeft}px`;
+      box.style.top = `${startTop}px`;
+      const moveX = endLeft - startLeft;
+      const moveY = endTop - startTop;
+      requestAnimationFrame(() => {
+        box.style.setProperty("--move-x", `${moveX}px`);
+        box.style.setProperty("--move-y", `${moveY}px`);
+      });
+    };
+
+    const renderStorageStage = ({ txItems }) => {
+      const card = stageCardChain;
+      const titleEl = stageTitleChain;
+      const listEl = stageListChain;
+      if (!card || !titleEl || !listEl) return;
+      card.classList.remove("is-stack");
+      card.classList.remove("is-extract");
+      card.classList.remove("is-encode");
+      card.classList.add("is-transaction");
+      const container = getTransactionContainer(card);
+      container.innerHTML = "";
+
+      const txBox = document.createElement("div");
+      txBox.className = "flow-storage-transaction";
+      const txTitle = document.createElement("div");
+      txTitle.className = "flow-transaction-title";
+      txTitle.textContent = "トランザクション";
+      txBox.appendChild(txTitle);
+      const txList = document.createElement("ul");
+      txList.className = "flow-stage-list";
+      txItems.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        txList.appendChild(li);
+      });
+      txBox.appendChild(txList);
+      container.appendChild(txBox);
+
+      const arrow = document.createElement("div");
+      arrow.className = "flow-stage-arrow";
+      arrow.textContent = "↓";
+      container.appendChild(arrow);
+
+      const storageBox = document.createElement("div");
+      storageBox.className = "flow-storage-box";
+      const storageTitle = document.createElement("div");
+      storageTitle.className = "flow-transaction-title";
+      storageTitle.textContent = "ストレージ";
+      storageBox.appendChild(storageTitle);
+      const storageSlot = document.createElement("div");
+      storageSlot.className = "flow-transaction-slot flow-storage-slot";
+      storageSlot.textContent = "・トランザクション";
+      storageBox.appendChild(storageSlot);
+      container.appendChild(storageBox);
+
+      card.classList.add("is-visible");
+      requestAnimationFrame(() => {
+        const txRect = txBox.getBoundingClientRect();
+        const slotRect = storageSlot.getBoundingClientRect();
+        const offset = slotRect.top - txRect.top;
+        txBox.style.setProperty("--merge-offset", `${offset}px`);
+      });
     };
 
       const renderStage = ({ title, items, target, isExtract, isEncode }) => {
@@ -408,7 +639,7 @@
     const openModal = (step) => {
       if (modalTitle) modalTitle.textContent = step.dataset.title || step.textContent || "";
       if (modalBeginner) modalBeginner.textContent = step.dataset.beginner || "";
-      if (modalAdvanced) modalAdvanced.innerHTML = step.dataset.advanced || "";
+      if (modalAdvanced) modalAdvanced.textContent = step.dataset.advanced || "";
       if (modalOverlay) modalOverlay.classList.add("is-open");
       buildStage(step);
     };
@@ -430,19 +661,39 @@
 
     const getTiming = (step) => {
       const styles = getComputedStyle(step);
+      const boardStyles = getComputedStyle(layout);
       const inlineDelay = step.style.getPropertyValue("--delay");
       const inlineDuration = step.style.getPropertyValue("--flow-duration");
       const delayValue = inlineDelay || styles.getPropertyValue("--delay") || styles.animationDelay;
-      const durationValue = inlineDuration || styles.getPropertyValue("--flow-duration") || styles.animationDuration;
+      const durationValue =
+        inlineDuration || styles.getPropertyValue("--flow-duration") || styles.animationDuration;
+      const fallbackDurationValue = boardStyles.getPropertyValue("--flow-duration") || "6s";
+      const delay = parseSeconds(delayValue.trim());
+      const duration = parseSeconds(durationValue.trim());
+      const fallbackDuration = parseSeconds(fallbackDurationValue.trim());
       return {
-        delay: parseSeconds(delayValue.trim()),
-        duration: parseSeconds(durationValue.trim()),
+        delay: Number.isFinite(delay) ? delay : 0,
+        duration: duration > 0 ? duration : fallbackDuration,
       };
     };
     if (steps.length > 0) {
       steps.forEach((step) => step.addEventListener("click", () => openModal(step)));
       let activeHighlight = null;
       let encodeRevealTimer = null;
+      let extractRevealTimer = null;
+      let transactionRevealTimer = null;
+      let transactionMergeTimer = null;
+      let signatureRevealTimer = null;
+      let signatureMergeTimer = null;
+      let storageMergeTimer = null;
+      let sendMoveTimer = null;
+      const stepLeadMs = 1000;
+      const encodeRevealDelayMs = stepLeadMs;
+      const transactionRevealDelayMs = stepLeadMs;
+      const transactionMergeDelayMs = stepLeadMs;
+      const signatureRevealDelayMs = stepLeadMs;
+      const signatureMergeDelayMs = stepLeadMs;
+      const storageMergeDelayMs = stepLeadMs;
       const setHighlight = (step) => {
         if (activeHighlight) {
           activeHighlight.classList.remove("is-animating");
@@ -470,16 +721,57 @@
           clearTimeout(encodeRevealTimer);
           encodeRevealTimer = null;
         }
+        if (extractRevealTimer) {
+          clearTimeout(extractRevealTimer);
+          extractRevealTimer = null;
+        }
+        if (transactionRevealTimer) {
+          clearTimeout(transactionRevealTimer);
+          transactionRevealTimer = null;
+        }
+        if (transactionMergeTimer) {
+          clearTimeout(transactionMergeTimer);
+          transactionMergeTimer = null;
+        }
+        if (signatureRevealTimer) {
+          clearTimeout(signatureRevealTimer);
+          signatureRevealTimer = null;
+        }
+        if (signatureMergeTimer) {
+          clearTimeout(signatureMergeTimer);
+          signatureMergeTimer = null;
+        }
+        if (storageMergeTimer) {
+          clearTimeout(storageMergeTimer);
+          storageMergeTimer = null;
+        }
+        if (sendMoveTimer) {
+          clearTimeout(sendMoveTimer);
+          sendMoveTimer = null;
+        }
         clearStage("local");
         clearStage("chain");
         const isExtractStep = shouldRenderStageForStep(step);
         const isEncodeStep = stepTitle === "データをエンコード";
+        const isTransactionStep = stepTitle === "トランザクションの作成";
+        const isSignStep = stepTitle === "トランザクションを署名";
+        const isSendStep = stepTitle === "トランザクションを送信";
+        const isStorageStep = stepTitle === "データをストレージに保管";
         setPlaceholderVisible("local", isExtractStep);
         setPlaceholderVisible("chain", false);
         if (isExtractStep) {
           const items = initialItems.length > 0 ? initialItems : parseItems(step.dataset.stageItems);
           if (items.length > 0) {
             buildStage(step, { title: initialTitle, items, mode: "simple", forceRender: true });
+            const target = step.dataset.stageTarget || "local";
+            const card = target === "chain" ? stageCardChain : stageCard;
+            if (card) {
+              card.classList.remove("is-visible");
+              void card.offsetWidth;
+              extractRevealTimer = setTimeout(() => {
+                card.classList.add("is-visible");
+              }, stepLeadMs);
+            }
           }
         }
         if (isEncodeStep) {
@@ -511,7 +803,73 @@
               requestAnimationFrame(() => {
                 reveal.classList.add("is-visible");
               });
-            }, 1000);
+            }, encodeRevealDelayMs);
+          }
+        }
+        if (isTransactionStep) {
+          renderTransactionStage({
+            target: step.dataset.stageTarget || "local",
+            bytesLabel: "バイト列",
+          });
+          setPlaceholderVisible("local", false);
+          setPlaceholderVisible("chain", false);
+          const target = step.dataset.stageTarget || "local";
+          const card = target === "chain" ? stageCardChain : stageCard;
+          const bytesBox = card ? card.querySelector(".flow-transaction-bytes") : null;
+          if (bytesBox) {
+            transactionMergeTimer = setTimeout(() => {
+              bytesBox.classList.add("is-merging");
+            }, transactionMergeDelayMs);
+          }
+        }
+        if (isSignStep) {
+          renderSignatureStage({
+            target: step.dataset.stageTarget || "local",
+            showSignature: false,
+          });
+          setPlaceholderVisible("local", false);
+          setPlaceholderVisible("chain", false);
+          const target = step.dataset.stageTarget || "local";
+          const card = target === "chain" ? stageCardChain : stageCard;
+          const reveal = card ? card.querySelector(".flow-signature-reveal") : null;
+          const signBox = card ? card.querySelector(".flow-signature-block") : null;
+          if (reveal) {
+            signatureRevealTimer = setTimeout(() => {
+              reveal.classList.add("is-visible");
+            }, signatureRevealDelayMs);
+          }
+          if (signBox) {
+            signatureMergeTimer = setTimeout(() => {
+              signBox.classList.add("is-moving");
+            }, signatureMergeDelayMs);
+          }
+        }
+        if (isSendStep) {
+          renderSendStage({
+            fromTarget: "local",
+            toTarget: "chain",
+          });
+          const sendBox = stageArea ? stageArea.querySelector(".flow-send-box") : null;
+          if (sendBox) {
+            sendBox.classList.remove("is-moving");
+            sendMoveTimer = setTimeout(() => {
+              sendBox.classList.add("is-moving");
+            }, stepLeadMs);
+          }
+          setPlaceholderVisible("local", false);
+          setPlaceholderVisible("chain", false);
+        }
+        if (isStorageStep) {
+          renderStorageStage({
+            txItems: ["その他", "バイト列", "署名"],
+          });
+          setPlaceholderVisible("local", false);
+          setPlaceholderVisible("chain", false);
+          const txBox = stageCardChain ? stageCardChain.querySelector(".flow-storage-transaction") : null;
+          if (txBox) {
+            storageMergeTimer = setTimeout(() => {
+              txBox.classList.add("is-merging");
+            }, storageMergeDelayMs);
           }
         }
       };
@@ -520,12 +878,36 @@
         const stepTitle = (step.dataset.title || step.textContent || "").trim();
         const isExtractStep = shouldRenderStageForStep(step);
         const isEncodeStep = stepTitle === "データをエンコード";
+        const isTransactionStep = stepTitle === "トランザクションの作成";
+        const isSignStep = stepTitle === "トランザクションを署名";
+        const isSendStep = stepTitle === "トランザクションを送信";
+        const isStorageStep = stepTitle === "データをストレージに保管";
         if (isExtractStep) {
           setPlaceholderVisible("local", true);
           setPlaceholderVisible("chain", false);
           return;
         }
         if (isEncodeStep) {
+          setPlaceholderVisible("local", false);
+          setPlaceholderVisible("chain", false);
+          return;
+        }
+        if (isTransactionStep) {
+          setPlaceholderVisible("local", false);
+          setPlaceholderVisible("chain", false);
+          return;
+        }
+        if (isSignStep) {
+          setPlaceholderVisible("local", false);
+          setPlaceholderVisible("chain", false);
+          return;
+        }
+        if (isSendStep) {
+          setPlaceholderVisible("local", false);
+          setPlaceholderVisible("chain", false);
+          return;
+        }
+        if (isStorageStep) {
           setPlaceholderVisible("local", false);
           setPlaceholderVisible("chain", false);
           return;
@@ -537,20 +919,24 @@
       };
 
       const timelineSteps = steps
-        .filter((step) => step.dataset.stageItems || step.dataset.stageInitialItems)
-        .map((step, index) => {
+        .filter((step) => {
+          const title = (step.dataset.title || step.textContent || "").trim();
+          return step.dataset.stageItems || step.dataset.stageInitialItems || title === "トランザクションを送信";
+        })
+        .map((step) => {
           const timing = getTiming(step);
-          const startMs = timing.delay * 1000;
-          const endMs = (timing.delay + timing.duration) * 1000;
-          return { step, startMs, endMs };
+          const durationMs = timing.duration * 1000;
+          return { step, durationMs };
         });
 
       const events = [];
-      let cumulativePause = 0;
+      const getStepWaitMs = () => 500;
+      let cumulativeMs = 0;
       timelineSteps.forEach((entry, index) => {
-        const pauseAfterMs = 0;
-        const startMs = entry.startMs + cumulativePause;
-        const endMs = entry.endMs + cumulativePause;
+        const startMs = cumulativeMs;
+        const endMs = startMs + stepLeadMs + entry.durationMs;
+        entry.adjustedStartMs = startMs;
+        entry.adjustedEndMs = endMs;
         events.push({
           time: startMs,
           action: () => {
@@ -565,7 +951,7 @@
             currentIndex = index;
           },
         });
-        cumulativePause += pauseAfterMs;
+        cumulativeMs = endMs + getStepWaitMs(entry.step);
       });
 
       let timeouts = [];
@@ -618,7 +1004,7 @@
         pausePlayback();
         const entry = timelineSteps[index];
         applyStepStart(entry.step);
-        elapsedMs = entry.startMs;
+        elapsedMs = entry.adjustedStartMs ?? entry.startMs;
         currentIndex = index;
       };
 
@@ -658,7 +1044,7 @@
       const header = base ? `【データ構造】\n${base}` : base;
       step.dataset.advanced = note ? `${header}\n\n${note}` : header;
       if (modalAdvanced) {
-        modalAdvanced.innerHTML = step.dataset.advanced || "";
+        modalAdvanced.textContent = step.dataset.advanced || "";
       }
     };
 

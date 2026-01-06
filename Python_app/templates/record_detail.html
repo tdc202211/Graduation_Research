@@ -37,73 +37,78 @@
 {% set output_json = detail_output | tojson(indent=2) %}
 
 <div class="flow-section">
-  <div class="flow-layout is-split" data-flow-layout>
+  <div class="flow-layout is-split is-static" data-flow-layout>
     <div class="flow-left">
-      <div class="flow-board">
+      <div class="flow-board" style="--flow-duration: 3s;">
         <div class="flow-column">
           <div class="flow-column-header flow-node" style="--delay: 0s;"
             data-title="ブロックチェーン"
             data-beginner="ここからはネットワーク側の処理です。"
             data-advanced="スマートコントラクトに問い合わせます。">ブロックチェーン</div>
-          <div class="flow-step flow-node" style="--delay: 3s;"
+          <div class="flow-step flow-node" style="--delay: 0s; --flow-duration: 4s;"
             data-title="コントラクトアドレスを指定"
             data-beginner="倉庫の場所（住所）を指定する"
             data-advanced='{{ "【データ構造】\\n" ~ (detail_contract | tojson(indent=2)) }}'
             data-advanced-note='{{ contract_address_note | e }}'
             data-stage-items="contractAddress"
             data-stage-target="chain">コントラクトアドレスを指定</div>
-          <div class="flow-step flow-node" style="--delay: 6s;"
+          <div class="flow-step flow-node" style="--delay: 0s;"
             data-title="コントラクト（関数）を指定"
             data-beginner="どの窓口（関数）に問い合わせるか決める"
             data-advanced='{{ "【データ構造】\\n" ~ (detail_call | tojson(indent=2)) }}'
             data-advanced-note='{{ contract_call_note | e }}'
             data-stage-items="function,args"
             data-stage-target="chain">コントラクトを指定</div>
-          <div class="flow-step flow-node" style="--delay: 9s;"
+          <div class="flow-step flow-node" style="--delay: 0s;"
             data-title="File IDを指定"
             data-beginner="探したい荷物の番号を伝える"
             data-advanced='{{ "【データ構造】\\n" ~ (detail_file_id | tojson(indent=2)) }}'
             data-advanced-note='{{ file_id_note | e }}'
             data-stage-items="fileId"
             data-stage-target="chain">File IDを指定</div>
-          <div class="flow-step flow-node flow-node-last" style="--delay: 12s;"
+          <div class="flow-step flow-node" style="--delay: 0s;"
             data-title="データを出力"
             data-beginner="該当する荷物の情報が返ってくる"
             data-advanced='{{ "【データ構造】\\n" ~ output_json }}'
             data-advanced-note='{{ output_note | e }}'
             data-stage-items="exists,fileHash,fileName,updatedAt"
             data-stage-target="chain">データを出力</div>
+          <div class="flow-column-header flow-node flow-node-last" style="--delay: 0s;"
+            data-title="ローカル"
+            data-beginner="取得したデータをローカルで確認します。"
+            data-advanced="取得結果をローカルで扱います。">ローカル</div>
         </div>
       </div>
     </div>
-    <div class="flow-stage" data-flow-stage>
-      <div class="flow-stage-panel" data-flow-stage-local>
-        <div class="flow-stage-label">ローカル</div>
-        <div class="flow-stage-card" data-flow-stage-card>
-          <div class="flow-stage-title" data-flow-stage-title>ローカル</div>
-          <ul class="flow-stage-list" data-flow-stage-list></ul>
+    <div class="flow-stage-wrap">
+      <div class="flow-stage" data-flow-stage>
+        <div class="flow-stage-panel" data-flow-stage-local>
+          <div class="flow-stage-label">ローカル</div>
+          <div class="flow-stage-card" data-flow-stage-card>
+            <div class="flow-stage-title" data-flow-stage-title>ローカル</div>
+            <ul class="flow-stage-list" data-flow-stage-list></ul>
+          </div>
         </div>
-        <div class="flow-stage-placeholder" data-flow-stage-placeholder>
-          <svg viewBox="0 0 200 240" role="img" aria-label="file icon">
-            <path d="M40 20h80l40 40v160H40z" fill="none" stroke="#111" stroke-width="6"/>
-            <path d="M120 20v40h40" fill="none" stroke="#111" stroke-width="6"/>
-            <path d="M60 100h80M60 130h80M60 160h80" fill="none" stroke="#111" stroke-width="6" stroke-linecap="round"/>
-          </svg>
+        <div class="flow-stage-panel" data-flow-stage-chain>
+          <div class="flow-stage-label">ブロックチェーン</div>
+          <div class="flow-stage-card" data-flow-stage-card-chain>
+            <div class="flow-stage-title" data-flow-stage-title-chain>ブロックチェーン</div>
+            <ul class="flow-stage-list" data-flow-stage-list-chain></ul>
+          </div>
+          <div class="flow-stage-placeholder" data-flow-stage-placeholder-chain>
+            <svg viewBox="0 0 200 240" role="img" aria-label="file icon">
+              <path d="M40 20h80l40 40v160H40z" fill="none" stroke="#111" stroke-width="6"/>
+              <path d="M120 20v40h40" fill="none" stroke="#111" stroke-width="6"/>
+              <path d="M60 100h80M60 130h80M60 160h80" fill="none" stroke="#111" stroke-width="6" stroke-linecap="round"/>
+            </svg>
+          </div>
         </div>
       </div>
-      <div class="flow-stage-panel" data-flow-stage-chain>
-        <div class="flow-stage-label">ブロックチェーン</div>
-        <div class="flow-stage-card" data-flow-stage-card-chain>
-          <div class="flow-stage-title" data-flow-stage-title-chain>ブロックチェーン</div>
-          <ul class="flow-stage-list" data-flow-stage-list-chain></ul>
-        </div>
-        <div class="flow-stage-placeholder" data-flow-stage-placeholder-chain>
-          <svg viewBox="0 0 200 240" role="img" aria-label="file icon">
-            <path d="M40 20h80l40 40v160H40z" fill="none" stroke="#111" stroke-width="6"/>
-            <path d="M120 20v40h40" fill="none" stroke="#111" stroke-width="6"/>
-            <path d="M60 100h80M60 130h80M60 160h80" fill="none" stroke="#111" stroke-width="6" stroke-linecap="round"/>
-          </svg>
-        </div>
+      <div class="flow-controls">
+        <button class="flow-btn" type="button" data-flow-control="start"><span class="flow-btn-icon">▶</span>スタート</button>
+        <button class="flow-btn" type="button" data-flow-control="pause"><span class="flow-btn-icon">⏸</span>停止</button>
+        <button class="flow-btn" type="button" data-flow-control="prev"><span class="flow-btn-icon">⏪</span>戻る</button>
+        <button class="flow-btn" type="button" data-flow-control="next"><span class="flow-btn-icon">⏩</span>次</button>
       </div>
     </div>
   </div>
@@ -149,18 +154,203 @@
     const stageCard = document.querySelector("[data-flow-stage-card]");
     const stageTitle = document.querySelector("[data-flow-stage-title]");
     const stageList = document.querySelector("[data-flow-stage-list]");
-    const stagePlaceholder = document.querySelector("[data-flow-stage-placeholder]");
     const stageCardChain = document.querySelector("[data-flow-stage-card-chain]");
     const stageTitleChain = document.querySelector("[data-flow-stage-title-chain]");
     const stageListChain = document.querySelector("[data-flow-stage-list-chain]");
-    const stagePlaceholderChain = document.querySelector("[data-flow-stage-placeholder-chain]");
+    const flowNodes = Array.from(layout.querySelectorAll(".flow-node"));
+    const controlStart = document.querySelector("[data-flow-control='start']");
+    const controlPause = document.querySelector("[data-flow-control='pause']");
+    const controlPrev = document.querySelector("[data-flow-control='prev']");
+    const controlNext = document.querySelector("[data-flow-control='next']");
+    let contractHighlightTimer = null;
 
-    const buildStage = (step) => {
-      const title = step.dataset.title || step.textContent || "";
-      const items = (step.dataset.stageItems || "")
+    const parseItems = (value) =>
+      (value || "")
         .split(",")
         .map((v) => v.trim())
         .filter(Boolean);
+
+    const computeOutputShift = (wrapper) => {
+      if (!wrapper) return;
+      const localPanel = document.querySelector("[data-flow-stage-local]");
+      const chainPanel = document.querySelector("[data-flow-stage-chain]");
+      if (!localPanel || !chainPanel) return;
+      const localRect = localPanel.getBoundingClientRect();
+      const chainRect = chainPanel.getBoundingClientRect();
+      const localCenter = localRect.left + localRect.width / 2;
+      const chainCenter = chainRect.left + chainRect.width / 2;
+      const deltaX = localCenter - chainCenter;
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const baseWidth = wrapperRect.width || chainRect.width;
+      const shiftPercent = baseWidth ? (deltaX / baseWidth) * 100 : 0;
+      wrapper.style.setProperty("--output-shift-pct", shiftPercent.toFixed(2));
+    };
+
+    const updateOutputShift = () => {
+      if (!stageCardChain) return;
+      const wrapper = stageCardChain.querySelector(".flow-output-wrapper");
+      if (wrapper) computeOutputShift(wrapper);
+    };
+
+    const clearChainStage = () => {
+      if (!stageCardChain) return;
+      stageCardChain.classList.remove("is-chain-map");
+      stageCardChain.classList.remove("is-hiding");
+      const existing = stageCardChain.querySelector(".flow-chain");
+      if (existing) existing.remove();
+      if (contractHighlightTimer) {
+        clearTimeout(contractHighlightTimer);
+        contractHighlightTimer = null;
+      }
+    };
+
+    const renderContractAddressStage = () => {
+      if (!stageCardChain || !stageTitleChain) return null;
+      clearChainStage();
+      stageCardChain.classList.add("is-chain-map");
+      stageTitleChain.textContent = "ブロックチェーン";
+      if (stageListChain) stageListChain.innerHTML = "";
+      const container = document.createElement("div");
+      container.className = "flow-chain";
+      const track = document.createElement("div");
+      track.className = "flow-chain-track";
+      const blocks = [];
+      for (let i = 0; i < 4; i += 1) {
+        const block = document.createElement("div");
+        block.className = "flow-chain-block";
+        track.appendChild(block);
+        blocks.push(block);
+      }
+      container.appendChild(track);
+      stageCardChain.appendChild(container);
+      stageCardChain.classList.remove("is-visible");
+      stageCardChain.classList.add("is-hiding");
+      void stageCardChain.offsetWidth;
+      stageCardChain.classList.add("is-visible");
+      requestAnimationFrame(() => {
+        stageCardChain.classList.remove("is-hiding");
+      });
+      return blocks[1] || blocks[0] || null;
+    };
+
+    const renderContractSelectStage = () => {
+      if (!stageCardChain || !stageTitleChain) return null;
+      clearChainStage();
+      stageCardChain.classList.add("is-chain-map");
+      stageTitleChain.textContent = "ブロックチェーン";
+      if (stageListChain) stageListChain.innerHTML = "";
+      const container = document.createElement("div");
+      container.className = "flow-chain";
+      const track = document.createElement("div");
+      track.className = "flow-chain-track";
+      const block = document.createElement("div");
+      block.className = "flow-chain-block is-large flow-contract";
+      const content = document.createElement("div");
+      content.className = "flow-chain-block-content";
+      const list = document.createElement("ul");
+      list.className = "flow-chain-block-list is-file-list";
+      ["関数1", "関数2", "関数3", "関数4", "..."].forEach((label) => {
+        const item = document.createElement("li");
+        item.textContent = label;
+        if (label === "関数2") {
+          item.classList.add("is-highlight");
+        }
+        list.appendChild(item);
+      });
+      content.appendChild(list);
+      block.appendChild(content);
+      track.appendChild(block);
+      container.appendChild(track);
+      stageCardChain.appendChild(container);
+      stageCardChain.classList.remove("is-visible");
+      void stageCardChain.offsetWidth;
+      stageCardChain.classList.add("is-visible");
+      return block;
+    };
+
+    const renderFileIdStage = () => {
+      if (!stageCardChain || !stageTitleChain) return null;
+      clearChainStage();
+      stageCardChain.classList.add("is-chain-map");
+      stageTitleChain.textContent = "ブロックチェーン";
+      if (stageListChain) stageListChain.innerHTML = "";
+      const container = document.createElement("div");
+      container.className = "flow-chain";
+      const track = document.createElement("div");
+      track.className = "flow-chain-track";
+      const block = document.createElement("div");
+      block.className = "flow-chain-block is-large flow-file-id";
+      const content = document.createElement("div");
+      content.className = "flow-chain-block-content";
+      const heading = document.createElement("div");
+      heading.textContent = "関数2";
+      content.appendChild(heading);
+      const list = document.createElement("ul");
+      list.className = "flow-chain-block-list";
+      ["File ID 1", "File ID 2", "File ID 3", "..."].forEach((label) => {
+        const item = document.createElement("li");
+        item.textContent = label;
+        if (label === "File ID 2") {
+          item.classList.add("is-highlight");
+        }
+        list.appendChild(item);
+      });
+      content.appendChild(list);
+      block.appendChild(content);
+      track.appendChild(block);
+      container.appendChild(track);
+      stageCardChain.appendChild(container);
+      stageCardChain.classList.remove("is-visible");
+      void stageCardChain.offsetWidth;
+      stageCardChain.classList.add("is-visible");
+      return block;
+    };
+
+    const renderOutputStage = () => {
+      if (!stageCardChain || !stageTitleChain) return null;
+      clearChainStage();
+      stageCardChain.classList.add("is-chain-map");
+      stageTitleChain.textContent = "ブロックチェーン";
+      if (stageListChain) stageListChain.innerHTML = "";
+      const container = document.createElement("div");
+      container.className = "flow-chain";
+      const track = document.createElement("div");
+      track.className = "flow-chain-track";
+      const block = document.createElement("div");
+      block.className = "flow-chain-block is-large";
+      track.appendChild(block);
+      const outputWrapper = document.createElement("div");
+      outputWrapper.className = "flow-output-wrapper";
+      const output = document.createElement("div");
+      output.className = "flow-output-card";
+      const outputList = document.createElement("ul");
+      outputList.className = "flow-output-card-list";
+      ["ファイル名", "ファイルハッシュ", "最終更新", "File ID"].forEach((label) => {
+        const item = document.createElement("li");
+        item.textContent = label;
+        outputList.appendChild(item);
+      });
+      output.appendChild(outputList);
+      outputWrapper.appendChild(output);
+      container.appendChild(track);
+      container.appendChild(outputWrapper);
+      stageCardChain.appendChild(container);
+      stageCardChain.classList.remove("is-visible");
+      void stageCardChain.offsetWidth;
+      stageCardChain.classList.add("is-visible");
+      requestAnimationFrame(() => {
+        computeOutputShift(outputWrapper);
+        output.classList.add("is-visible");
+        setTimeout(() => {
+          outputWrapper.classList.add("is-shifted");
+        }, 1600);
+      });
+      return block;
+    };
+
+    const buildStage = (step) => {
+      const title = step.dataset.title || step.textContent || "";
+      const items = parseItems(step.dataset.stageItems);
       const target = step.dataset.stageTarget || "local";
       if (target === "chain") {
         if (!stageCardChain || !stageTitleChain || !stageListChain) return;
@@ -190,17 +380,38 @@
     };
 
     const openModal = (step) => {
-      steps.forEach((s) => s.classList.remove("is-active"));
-      step.classList.add("is-active");
+      const stepTitle = (step.dataset.title || step.textContent || "").trim();
+      const isContractAddressStep = stepTitle === "コントラクトアドレスを指定";
+      const isContractSelectStep = stepTitle === "コントラクト（関数）を指定";
+      const isFileIdStep = stepTitle === "File IDを指定";
+      const isOutputStep = stepTitle === "データを出力";
+      if (isContractAddressStep) {
+        const highlightTarget = renderContractAddressStage();
+        if (highlightTarget) {
+          highlightTarget.classList.add("is-highlight");
+          highlightTarget.classList.add("is-alert");
+        }
+      }
+      if (isContractSelectStep) {
+        renderContractSelectStage();
+      }
+      if (isFileIdStep) {
+        renderFileIdStage();
+      }
+      if (isOutputStep) {
+        renderOutputStage();
+      }
       if (modalTitle) modalTitle.textContent = step.dataset.title || step.textContent || "";
       if (modalBeginner) modalBeginner.textContent = step.dataset.beginner || "";
       if (modalAdvanced) {
         const note = step.dataset.advancedNote;
         const base = step.dataset.advanced || "";
-        modalAdvanced.innerHTML = note ? `${base}\n\n${note}` : base;
+        modalAdvanced.textContent = note ? `${base}\n\n${note}` : base;
       }
       if (modalOverlay) modalOverlay.classList.add("is-open");
-      buildStage(step);
+      if (!isContractAddressStep && !isContractSelectStep && !isFileIdStep && !isOutputStep) {
+        buildStage(step);
+      }
     };
 
     const closeModal = () => {
@@ -211,6 +422,24 @@
       if (!value) return 0;
       if (value.endsWith("ms")) return parseFloat(value) / 1000;
       return parseFloat(value);
+    };
+
+    const getTiming = (step) => {
+      const styles = getComputedStyle(step);
+      const boardStyles = getComputedStyle(layout);
+      const inlineDelay = step.style.getPropertyValue("--delay");
+      const inlineDuration = step.style.getPropertyValue("--flow-duration");
+      const delayValue = inlineDelay || styles.getPropertyValue("--delay") || styles.animationDelay;
+      const durationValue =
+        inlineDuration || styles.getPropertyValue("--flow-duration") || styles.animationDuration;
+      const fallbackDurationValue = boardStyles.getPropertyValue("--flow-duration") || "6s";
+      const delay = parseSeconds(delayValue.trim());
+      const duration = parseSeconds(durationValue.trim());
+      const fallbackDuration = parseSeconds(fallbackDurationValue.trim());
+      return {
+        delay: Number.isFinite(delay) ? delay : 0,
+        duration: duration > 0 ? duration : fallbackDuration,
+      };
     };
 
     if (steps.length > 0) {
@@ -227,18 +456,158 @@
         step.style.borderColor = "#e04b3f";
         step.style.borderWidth = "6px";
       };
-      steps.forEach((step) => {
-        if (!step.dataset.stageItems) return;
-        const styles = getComputedStyle(step);
-        const delay = parseSeconds(styles.animationDelay);
-        const duration = parseSeconds(styles.animationDuration);
-        const startMs = delay * 1000;
-        const endMs = (delay + duration) * 1000;
-        setTimeout(() => setHighlight(step), startMs);
-        setTimeout(() => {
+
+      const setFlowAnimationState = (state) => {
+        flowNodes.forEach((node) => {
+          node.style.animationPlayState = state;
+        });
+      };
+
+      const applyStepStart = (step) => {
+        clearChainStage();
+        setHighlight(step);
+      const stepTitle = (step.dataset.title || step.textContent || "").trim();
+      const isContractAddressStep = stepTitle === "コントラクトアドレスを指定";
+      const isContractSelectStep = stepTitle === "コントラクト（関数）を指定";
+      const isFileIdStep = stepTitle === "File IDを指定";
+      const isOutputStep = stepTitle === "データを出力";
+      if (isContractAddressStep) {
+        const highlightTarget = renderContractAddressStage();
+        if (highlightTarget) {
+          contractHighlightTimer = setTimeout(() => {
+            highlightTarget.classList.add("is-highlight");
+            highlightTarget.classList.add("is-alert");
+          }, stepLeadMs);
+        }
+        return;
+      }
+      if (isContractSelectStep) {
+        renderContractSelectStage();
+        return;
+      }
+      if (isFileIdStep) {
+        renderFileIdStage();
+        return;
+      }
+      if (isOutputStep) {
+        renderOutputStage();
+        return;
+      }
+        if (step.dataset.stageItems) {
           buildStage(step);
-        }, endMs);
+        }
+      };
+
+      const applyStepEnd = (step) => {
+        if (!step.dataset.stageItems) return;
+        buildStage(step);
+      };
+
+      const timelineSteps = steps
+        .filter((step) => step.dataset.stageItems)
+        .map((step) => {
+          const timing = getTiming(step);
+          const durationMs = timing.duration * 1000;
+          return { step, durationMs };
+        });
+
+      const events = [];
+      const getStepWaitMs = () => 0;
+      let cumulativeMs = 0;
+      const stepLeadMs = 1000;
+      timelineSteps.forEach((entry, index) => {
+        const startMs = cumulativeMs;
+        const endMs = startMs + stepLeadMs + entry.durationMs;
+        entry.adjustedStartMs = startMs;
+        entry.adjustedEndMs = endMs;
+        events.push({
+          time: startMs,
+          action: () => {
+            applyStepStart(entry.step);
+            currentIndex = index;
+          },
+        });
+        events.push({
+          time: endMs,
+          action: () => {
+            applyStepEnd(entry.step);
+            currentIndex = index;
+          },
+        });
+        cumulativeMs = endMs + getStepWaitMs(entry.step);
       });
+
+      let timeouts = [];
+      let isPlaying = false;
+      let playStart = 0;
+      let elapsedMs = 0;
+      let currentIndex = -1;
+
+      const clearTimers = () => {
+        timeouts.forEach((id) => clearTimeout(id));
+        timeouts = [];
+      };
+
+      const scheduleFrom = (elapsed) => {
+        clearTimers();
+        events.forEach((evt) => {
+          if (evt.time < elapsed) return;
+          const id = setTimeout(evt.action, evt.time - elapsed);
+          timeouts.push(id);
+        });
+      };
+
+      const startPlayback = () => {
+        if (isPlaying || timelineSteps.length === 0) return;
+        isPlaying = true;
+        setFlowAnimationState("running");
+        playStart = performance.now();
+        scheduleFrom(elapsedMs);
+      };
+
+      const resetPlayback = () => {
+        clearTimers();
+        elapsedMs = 0;
+        currentIndex = -1;
+        isPlaying = false;
+        setFlowAnimationState("running");
+        startPlayback();
+      };
+
+      const pausePlayback = () => {
+        if (!isPlaying) return;
+        isPlaying = false;
+        elapsedMs += performance.now() - playStart;
+        clearTimers();
+        setFlowAnimationState("paused");
+      };
+
+      const jumpToStep = (index) => {
+        if (index < 0 || index >= timelineSteps.length) return;
+        pausePlayback();
+        const entry = timelineSteps[index];
+        applyStepStart(entry.step);
+        elapsedMs = entry.adjustedStartMs ?? entry.startMs;
+        currentIndex = index;
+      };
+
+      if (controlStart) controlStart.addEventListener("click", startPlayback);
+      if (controlPause) controlPause.addEventListener("click", pausePlayback);
+      if (controlPrev) {
+        controlPrev.addEventListener("click", () => {
+          const targetIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
+          jumpToStep(targetIndex);
+        });
+      }
+      if (controlNext) {
+        controlNext.addEventListener("click", () => {
+          const targetIndex =
+            currentIndex >= timelineSteps.length - 1 ? timelineSteps.length - 1 : currentIndex + 1;
+          jumpToStep(targetIndex);
+        });
+      }
+
+      resetPlayback();
     }
 
     if (modalClose) modalClose.addEventListener("click", closeModal);
@@ -250,6 +619,8 @@
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closeModal();
     });
+
+    window.addEventListener("resize", updateOutputShift);
   })();
 </script>
 {% endblock %}
