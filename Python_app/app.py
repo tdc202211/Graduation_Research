@@ -14,6 +14,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from box_client import BoxUploader
+from box_records import fetch_box_files
 from eth_client import EthereumClient
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -32,6 +33,7 @@ app.secret_key = _flask_secret
 BOX_CLIENT_ID = os.getenv("BOX_CLIENT_ID")
 BOX_CLIENT_SECRET = os.getenv("BOX_CLIENT_SECRET")
 BOX_REDIRECT_URI = os.getenv("BOX_REDIRECT_URI")
+BOX_LIST_FOLDER_ID = os.getenv("BOX_LIST_FOLDER_ID", "0")
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -52,6 +54,8 @@ app.config.update(
 TOKEN_STORE: dict[str, dict[str, str]] = {}
 TOKEN_STORE_LOCK = threading.Lock()
 OAUTH_STATE_TTL = int(os.getenv("OAUTH_STATE_TTL_SECONDS", "600"))
+TOKEN_STORE_DIR = BASE_DIR / "token_store"
+LAST_TOKEN_FILE = TOKEN_STORE_DIR / "last_token.json"
 
 
 def _get_token_key() -> str:
@@ -62,22 +66,111 @@ def _get_token_key() -> str:
     return token_key
 
 
+def _token_persist_enabled() -> bool:
+    return _env_flag("PERSIST_BOX_TOKENS", True)
+
+
+def _auto_login_from_saved_token() -> bool:
+    return _env_flag("AUTO_LOGIN_FROM_SAVED_TOKEN", False)
+
+
+def _token_path(token_key: str) -> Path:
+    return TOKEN_STORE_DIR / f"{token_key}.json"
+
+
+def _load_tokens_from_disk(token_key: str) -> dict[str, str] | None:
+    if not _token_persist_enabled():
+        return None
+    path = _token_path(token_key)
+    if not path.exists():
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict) and data.get("access_token"):
+            return data
+    except Exception:
+        return None
+    return None
+
+
+def _save_tokens_to_disk(token_key: str, data: dict[str, str]) -> None:
+    if not _token_persist_enabled():
+        return
+    TOKEN_STORE_DIR.mkdir(parents=True, exist_ok=True)
+    path = _token_path(token_key)
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=True, indent=2)
+
+
+def _save_last_token_key(token_key: str) -> None:
+    if not _token_persist_enabled():
+        return
+    TOKEN_STORE_DIR.mkdir(parents=True, exist_ok=True)
+    with LAST_TOKEN_FILE.open("w", encoding="utf-8") as f:
+        json.dump({"token_key": token_key}, f, ensure_ascii=True, indent=2)
+
+
+def _load_last_token_key() -> str | None:
+    if not (_token_persist_enabled() and _auto_login_from_saved_token()):
+        return None
+    if not LAST_TOKEN_FILE.exists():
+        return None
+    try:
+        with LAST_TOKEN_FILE.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        token_key = data.get("token_key") if isinstance(data, dict) else None
+        if isinstance(token_key, str) and token_key:
+            return token_key
+    except Exception:
+        return None
+    return None
+
+
+def _clear_last_token_key_if_match(token_key: str) -> None:
+    if not _token_persist_enabled():
+        return
+    if not LAST_TOKEN_FILE.exists():
+        return
+    try:
+        with LAST_TOKEN_FILE.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict) and data.get("token_key") == token_key:
+            LAST_TOKEN_FILE.unlink()
+    except Exception:
+        return
+
+
 def store_tokens(access_token, refresh_token):
     token_key = _get_token_key()
     with TOKEN_STORE_LOCK:
-        TOKEN_STORE[token_key] = {
+        tokens = {
             "access_token": access_token,
             "refresh_token": refresh_token,
             "updated_at": int(time.time()),
         }
+        TOKEN_STORE[token_key] = tokens
+    _save_tokens_to_disk(token_key, tokens)
+    _save_last_token_key(token_key)
 
 
 def _get_tokens():
     token_key = session.get("token_key")
     if not token_key:
-        return None
+        token_key = _load_last_token_key()
+        if token_key:
+            session["token_key"] = token_key
+        else:
+            return None
     with TOKEN_STORE_LOCK:
-        return TOKEN_STORE.get(token_key)
+        cached = TOKEN_STORE.get(token_key)
+    if cached:
+        return cached
+    tokens = _load_tokens_from_disk(token_key)
+    if tokens:
+        with TOKEN_STORE_LOCK:
+            TOKEN_STORE[token_key] = tokens
+    return tokens
 
 
 def _new_oauth_state() -> str:
@@ -338,12 +431,25 @@ def records():
     except Exception as ex:
         chain_error = f"{type(ex).__name__}: {ex}"
 
+    box_files = []
+    box_error = None
+    client = build_client()
+    if client is None:
+        box_error = "Boxにログインしてください。"
+    else:
+        try:
+            box_files = fetch_box_files(client, BOX_LIST_FOLDER_ID)
+        except Exception as ex:
+            box_error = f"{type(ex).__name__}: {ex}"
+
     contract_address = os.getenv("ETH_CONTRACT_ADDRESS")
     return render_template(
         "records.html",
         records=history,
         chain_error=chain_error,
         contract_address=contract_address,
+        box_files=box_files,
+        box_error=box_error,
     )
 
 
@@ -367,6 +473,18 @@ def record_detail(file_id):
         chain_error=chain_error,
         contract_address=contract_address,
     )
+
+
+@app.route("/box/delete/<file_id>", methods=["POST"])
+def box_delete(file_id):
+    client = build_client()
+    if client is None:
+        return redirect(url_for("login"))
+    try:
+        client.file(str(file_id)).delete()
+    except Exception:
+        pass
+    return redirect(url_for("records"))
 
 
 @app.route("/payload/latest")
@@ -433,6 +551,14 @@ def logout():
     if token_key:
         with TOKEN_STORE_LOCK:
             TOKEN_STORE.pop(token_key, None)
+        if _token_persist_enabled():
+            token_path = _token_path(token_key)
+            if token_path.exists():
+                try:
+                    token_path.unlink()
+                except OSError:
+                    pass
+            _clear_last_token_key_if_match(token_key)
     if payload_path:
         try:
             Path(payload_path).unlink()

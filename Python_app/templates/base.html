@@ -6,61 +6,352 @@
     <title>Box Upload App</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
+        @import url("https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Space+Grotesk:wght@500;600&display=swap");
+
+        :root {
+            --ink: #0f172a;
+            --muted: #5b6475;
+            --accent: #0f4c5c;
+            --accent-strong: #0b3a46;
+            --surface: #ffffff;
+            --surface-alt: #f4f1ea;
+            --border: rgba(15, 23, 42, 0.1);
+        }
+
         body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: #f5f5f5;
+            font-family: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", sans-serif;
+            background: radial-gradient(circle at top left, #fcecc9, #f7f0e4 40%, #f1f6fb 85%);
+            color: var(--ink);
             margin: 0;
         }
 
         header {
-            background: #0061d5;
+            background: linear-gradient(120deg, #0f4c5c, #153b5f);
             color: #fff;
-            padding: 12px 20px;
+            padding: 0 24px;
+            height: 72px;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            justify-content: center;
+            align-items: stretch;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            box-shadow: 0 12px 22px rgba(15, 76, 92, 0.18);
+        }
+
+        .brand {
+            font-family: "Space Grotesk", "Zen Kaku Gothic New", sans-serif;
+            font-size: 18px;
+            letter-spacing: 0.04em;
         }
 
         header a {
             color: #fff;
             text-decoration: none;
-            margin-left: 12px;
+            margin-left: 0;
             font-size: 14px;
+            opacity: 0.85;
+            transition: opacity 0.2s ease;
+        }
+
+        header a:hover {
+            opacity: 1;
+        }
+
+        nav {
+            display: flex;
+            gap: 0;
+            align-items: stretch;
+            height: 100%;
+        }
+
+        nav a {
+            position: relative;
+            padding: 0 26px;
+            border-radius: 6px;
+            overflow: hidden;
+            isolation: isolate;
+            transition: color 0.2s ease;
+            display: flex;
+            align-items: center;
+            height: 100%;
+        }
+
+        nav a::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: rgba(90, 140, 210, 0.45);
+            transform: scaleY(0);
+            transform-origin: bottom;
+            transition: transform 0.35s ease;
+            will-change: transform;
+            z-index: -1;
+        }
+
+        nav a:hover::before,
+        nav a:focus-visible::before {
+            transform: scaleY(1);
         }
 
         .container {
-            width: 80%;
-            margin: 32px auto;
-            background: #fff;
-            padding: 24px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            width: min(1400px, 90%);
+            margin: 32px auto 48px;
+            background: var(--surface);
+            padding: clamp(20px, 4vw, 36px);
+            border-radius: 18px;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.8);
         }
 
         h1 {
             margin-top: 0;
         }
 
-        .btn {
+        .page-title {
+            text-align: center;
+        }
+
+        .page-lead {
+            text-align: center;
+            color: var(--muted);
+            margin: 0 0 18px;
+        }
+
+        .center-stack {
+            text-align: center;
+        }
+
+        .center-stack hr {
+            margin: 18px auto;
+        }
+
+        .app-btn {
             display: inline-block;
-            padding: 8px 16px;
+            padding: 2vh 2.8vw;
             border-radius: 999px;
             border: none;
-            background: #0061d5;
+            background: #475569;
             color: #fff;
             text-decoration: none;
             cursor: pointer;
-            font-size: 14px;
+            font-size: clamp(13px, 1.3vw, 16px);
+            font-weight: 600;
+            box-shadow: none;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            max-width: 20vw;
+            min-width: 0;
         }
 
-        .btn-secondary {
-            background: #e0e0e0;
-            color: #333;
+        .app-btn.is-primary {
+            background: #2563eb;
+        }
+
+        .app-btn.is-primary:hover {
+            filter: brightness(1.08);
+        }
+
+        .app-btn.is-small {
+            padding: 1.2vh 1.8vw;
+            font-size: clamp(12px, 1vw, 14px);
+            max-width: 14vw;
+        }
+
+        .app-btn.is-fixed {
+            white-space: nowrap;
+            min-width: 4.2em;
+            text-align: center;
+        }
+
+        .app-btn.is-compact {
+            padding: 1vh 1.4vw;
+            font-size: clamp(11px, 0.9vw, 13px);
+            max-width: 12vw;
+        }
+
+        .app-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: none;
+            filter: brightness(1.03);
+        }
+
+        .app-btn:active {
+            transform: translateY(1px);
         }
 
         .error {
             color: #c00;
             margin-bottom: 8px;
+        }
+
+        .form-center {
+            text-align: center;
+        }
+
+        .form-center input[type="file"] {
+            margin-left: auto;
+            margin-right: auto;
+            display: block;
+            font-size: clamp(14px, 1.4vw, 18px);
+            padding: 0.8vmin 0.8vw;
+        }
+
+        .form-center .app-btn + .app-btn {
+            margin-left: 5vw;
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 24px;
+            align-items: center;
+            margin-bottom: 28px;
+            text-align: center;
+            justify-items: center;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: #f1e6d4;
+            color: #704214;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .hero-title {
+            font-size: clamp(26px, 4vw, 38px);
+            line-height: 1.3;
+            margin: 12px 0 14px;
+        }
+
+        .hero-lead {
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1.8;
+            margin: 0 0 18px;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 5vw;
+            flex-wrap: nowrap;
+            justify-content: center;
+            align-items: center;
+            height: auto;
+        }
+
+        .hero-actions .app-btn {
+            width: 18vw;
+            min-width: 18vw;
+            max-width: 18vw;
+            text-align: center;
+            opacity: 1;
+            padding: 3.5vmin 2.4vw;
+            font-size: clamp(13px, 1.2vw, 16px);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.2;
+            white-space: nowrap;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+        }
+
+        .hero-actions .app-btn:hover {
+            opacity: 1;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+        }
+
+        .info-card {
+            background: var(--surface-alt);
+            border-radius: 14px;
+            padding: 18px 20px;
+            border: 1px solid var(--border);
+        }
+
+        .info-card-title {
+            font-weight: 700;
+            margin-bottom: 6px;
+            font-size: 15px;
+        }
+
+        .info-card-text {
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.7;
+            margin: 0;
+        }
+
+        .help-tooltip-wrap {
+            display: inline-flex;
+            align-items: center;
+            position: relative;
+        }
+
+        .help-tooltip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.2em;
+            height: 1.2em;
+            margin-left: 0.4em;
+            border-radius: 999px;
+            background: #e5e7eb;
+            color: #374151;
+            font-size: 0.85em;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+            padding: 0;
+        }
+
+        .help-tooltip-text {
+            position: fixed;
+            top: 0;
+            left: 0;
+            background: #cfe9df;
+            color: #1f2937;
+            padding: 2.0vh 1.4vw;
+            border-radius: 10px;
+            font-size: 14px;
+            min-width: 30vw;
+            max-width: 42vw;
+            white-space: normal;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            z-index: 2000;
+        }
+
+        .help-tooltip-wrap.is-open .help-tooltip-text {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            overflow-y: visible;
+            position: relative;
+        }
+
+        .table-wrap table {
+            overflow: visible;
+        }
+
+        .table-wrap th {
+            position: relative;
+            overflow: visible;
         }
 
         input[type="file"] {
@@ -152,8 +443,8 @@
         .flow-stage {
             flex: 0 0 70%;
             max-width: 70%;
-            min-height: 360px;
-            height: 460px;
+            min-height: clamp(420px, 55vh, 560px);
+            height: clamp(520px, 65vh, 700px);
             display: flex;
             align-items: stretch;
             justify-content: center;
@@ -534,10 +825,23 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: clamp(12px, 3vw, 18px);
+            gap: 2px;
             width: 100%;
             padding: clamp(2px, 1vw, 4px) 0 clamp(6px, 2vw, 10px);
             margin-top: clamp(28px, 6vw, 50px);
+        }
+
+        .flow-chain.is-contract-address .flow-chain-block {
+            width: min(90px, 28%);
+            aspect-ratio: 9 / 7;
+        }
+
+        .flow-chain.is-contract-address {
+            gap: clamp(12px, 3vw, 18px);
+        }
+
+        .flow-chain.is-contract-address .flow-chain-track {
+            gap: clamp(16px, 4vw, 30px);
         }
 
         .flow-chain-track {
@@ -545,7 +849,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: clamp(16px, 4vw, 30px);
+            gap: 2px;
             padding: clamp(4px, 1.5vw, 6px) 0;
             width: min(320px, 80%);
         }
@@ -572,11 +876,24 @@
             z-index: 1;
         }
 
+        .flow-chain-block.is-tiny {
+            width: min(28px, 10%);
+            aspect-ratio: 1 / 1;
+            border-radius: clamp(1px, 0.3vw, 2px);
+        }
+
+        .flow-chain-block.is-enlarged {
+            transform: scale(1.35);
+            border-color: #0f4c5c;
+            box-shadow: 0 12px 20px rgba(15, 23, 42, 0.16);
+            z-index: 2;
+        }
+
         .flow-chain-block.is-large {
-            width: min(360px, 85%);
+            width: min(560px, 96%);
             height: auto;
             aspect-ratio: 6 / 5;
-            max-height: min(250px, 70%);
+            max-height: min(320px, 80%);
         }
 
         .flow-chain-block.is-large .flow-chain-block-content {
@@ -593,10 +910,22 @@
             padding-left: var(--flow-list-indent);
         }
 
+        .flow-chain-block.is-large.flow-contract {
+            width: min(560px, 96%);
+        }
+
         .flow-chain-block.is-large.flow-file-id .flow-chain-block-list {
             margin: 0;
             --flow-list-indent: clamp(2.4em, 6vw, 3.2em);
             padding-left: var(--flow-list-indent);
+        }
+
+        .flow-chain-block.is-large.flow-file-id {
+            width: min(560px, 96%);
+        }
+
+        .flow-chain-block.is-large.flow-file-id .flow-chain-block-list li {
+            white-space: nowrap;
         }
 
         .flow-chain-block.is-large .flow-chain-block-content > div {
@@ -635,6 +964,7 @@
             }
         }
 
+
         .flow-chain-block.is-highlight {
             opacity: 1;
             border-color: #0f4c5c;
@@ -646,6 +976,7 @@
             box-shadow: 0 0 0 clamp(2px, 1vw, 4px) rgba(193, 18, 31, 0.6);
             animation: chainBlink 1.2s ease-in-out infinite;
         }
+
 
         .flow-output-wrapper {
             position: absolute;
@@ -665,7 +996,7 @@
         }
 
         .flow-output-card {
-            width: min(320px, 80%);
+            width: min(460px, 92%);
             background: #0f4c5c;
             color: #fff;
             border: 2px solid #0a3743;
@@ -727,23 +1058,9 @@
             width: 100%;
         }
 
-        .flow-btn {
-            background: #0f4c5c;
-            color: #fff;
-            border: 2px solid #0a3743;
-            border-radius: 999px;
-            padding: 8px 18px;
-            font-size: 14px;
-            cursor: pointer;
-        }
-
         .flow-btn-icon {
             display: inline-block;
             margin-right: 6px;
-        }
-
-        .flow-btn:active {
-            transform: translateY(1px);
         }
 
         .flow-modal-overlay {
@@ -786,15 +1103,6 @@
             font-size: 16px;
         }
 
-        .flow-modal-close {
-            border: none;
-            background: #e0e0e0;
-            color: #333;
-            padding: 6px 12px;
-            border-radius: 999px;
-            cursor: pointer;
-            font-size: 13px;
-        }
 
         .flow-modal-body {
             padding: 16px 18px 20px;
@@ -881,7 +1189,38 @@
             align-items: center;
             justify-content: center;
             box-sizing: border-box;
-            transition: border-color 0.2s ease, border-width 0.2s ease;
+            transition: border-color 0.2s ease, border-width 0.2s ease, transform 0.2s ease,
+                box-shadow 0.2s ease;
+            position: relative;
+        }
+
+        .flow-node {
+            transition: transform 0.2s ease;
+        }
+
+        .flow-node:hover {
+            transform: translateY(-6px);
+        }
+
+        .flow-node:hover .flow-step {
+            border-color: #e36b2c;
+            box-shadow: 0 6px 16px rgba(227, 107, 44, 0.25);
+        }
+
+        .flow-step-hint {
+            position: absolute;
+            right: 10px;
+            bottom: 8px;
+            font-size: 11px;
+            color: #2b3f59;
+            opacity: 0.65;
+            pointer-events: none;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+
+        .flow-step:hover .flow-step-hint {
+            opacity: 0.9;
+            transform: translateX(2px);
         }
 
         .flow-step.is-active {
@@ -959,16 +1298,15 @@
 
 <body>
     <header>
-        <div>📦 Box Upload App</div>
         <nav>
-            <a href="{{ url_for('index') }}">Home</a>
-            <a href="{{ url_for('me') }}">Profile</a>
-            <a href="{{ url_for('upload') }}">Upload</a>
-            <a href="{{ url_for('records') }}">Records</a>
-            {% if session.get('access_token') %}
-            <a href="{{ url_for('logout') }}">Logout</a>
+            <a href="{{ url_for('index') }}">ホーム</a>
+            <a href="{{ url_for('me') }}">ユーザ情報</a>
+            <a href="{{ url_for('upload') }}">アップロード</a>
+            <a href="{{ url_for('records') }}">参照</a>
+            {% if session.get('token_key') %}
+            <a href="{{ url_for('logout') }}">ログアウト</a>
             {% else %}
-            <a href="{{ url_for('login') }}">Login</a>
+            <a href="{{ url_for('login') }}">ログイン</a>
             {% endif %}
         </nav>
     </header>
@@ -976,6 +1314,66 @@
     <div class="container">
         {% block content %}{% endblock %}
     </div>
+    <script>
+        const setTooltipPosition = (wrap) => {
+            const button = wrap.querySelector(".help-tooltip");
+            const tooltip = wrap.querySelector(".help-tooltip-text");
+            if (!button || !tooltip) {
+                return;
+            }
+
+            const rect = button.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const gap = 8;
+
+            let left = rect.left + rect.width / 2 - tooltip.offsetWidth / 2;
+            let top = rect.bottom + gap;
+
+            if (left < 12) {
+                left = 12;
+            }
+            if (left + tooltip.offsetWidth > viewportWidth - 12) {
+                left = viewportWidth - tooltip.offsetWidth - 12;
+            }
+            if (top + tooltip.offsetHeight > viewportHeight - 12) {
+                top = rect.top - tooltip.offsetHeight - gap;
+            }
+
+            tooltip.style.left = `${Math.max(12, left)}px`;
+            tooltip.style.top = `${Math.max(12, top)}px`;
+        };
+
+        document.addEventListener("click", (event) => {
+            const target = event.target;
+            const wrap = target.closest("[data-help-tooltip]");
+            const all = document.querySelectorAll("[data-help-tooltip]");
+
+            all.forEach((item) => {
+                const button = item.querySelector(".help-tooltip");
+                if (item === wrap) {
+                    const isOpen = item.classList.toggle("is-open");
+                    if (button) {
+                        button.setAttribute("aria-expanded", String(isOpen));
+                    }
+                    if (isOpen) {
+                        setTooltipPosition(item);
+                    }
+                } else {
+                    item.classList.remove("is-open");
+                    if (button) {
+                        button.setAttribute("aria-expanded", "false");
+                    }
+                }
+            });
+        });
+
+        window.addEventListener("resize", () => {
+            document.querySelectorAll("[data-help-tooltip].is-open").forEach((item) => {
+                setTooltipPosition(item);
+            });
+        });
+    </script>
 </body>
 
 </html>

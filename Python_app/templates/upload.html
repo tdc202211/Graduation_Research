@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>ファイルをアップロード</h1>
+<h1 class="page-title">ファイルをアップロード</h1>
 
 {% if error %}
 <p class="error">{{ error }}</p>
 {% endif %}
 
-<form method="POST" enctype="multipart/form-data">
+<form method="POST" enctype="multipart/form-data" class="form-center">
     <input type="file" name="file" />
     <br />
-    <button type="submit" class="btn">アップロード</button>
-    <a href="{{ url_for('index') }}" class="btn btn-secondary">キャンセル</a>
+    <button type="submit" class="app-btn">アップロード</button>
+    <a href="{{ url_for('index') }}" class="app-btn">キャンセル</a>
 </form>
 {% endblock %}

@@ -1,45 +1,128 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>ファイル一覧</h1>
-<p>ブロックチェーン上の FileRegistry から取得した最新情報一覧です。</p>
+<h1 class="page-title">ファイル一覧</h1>
 
-{% if chain_error %}
-<p class="error">取得に失敗しました: {{ chain_error }}</p>
-{% endif %}
+<div style="display:grid; grid-template-columns: 0.8fr 1.2fr; gap: 2vw; align-items:start;">
+    <section style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; min-width: 0;">
+        <h2 class="page-title">Box</h2>
 
-{% if records %}
-<div style="overflow-x:auto;">
-    <table style="width:100%; border-collapse: collapse;">
-        <thead>
-            <tr style="text-align:left; border-bottom: 1px solid #ddd;">
-                <th style="padding:8px;">アップロード日時</th>
-                <th style="padding:8px;">ファイル名</th>
-                <th style="padding:8px;">File ID</th>
-                <th style="padding:8px;">コントラクトアドレス</th>
-                <th style="padding:8px;">詳細</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in records %}
-            <tr style="border-bottom: 1px solid #f0f0f0;">
-                <td style="padding:8px; white-space: nowrap;">{{ item.updatedAt or item.uploadedAt or "-" }}</td>
-                <td style="padding:8px;">{{ item.fileName or "-" }}</td>
-                <td style="padding:8px; font-family: monospace;">{{ item.fileId or "-" }}</td>
-                <td style="padding:8px; font-family: monospace;">{{ contract_address or "-" }}</td>
-                <td style="padding:8px;">
-                    {% if item.fileId %}
-                    <a href="{{ url_for('record_detail', file_id=item.fileId) }}" class="btn btn-secondary">詳細</a>
-                    {% else %}
-                    -
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+        {% if box_error %}
+        <p class="error page-lead">取得に失敗しました: {{ box_error }}</p>
+        {% endif %}
+
+        {% if box_files %}
+        <div class="table-wrap" style="overflow-x: auto; max-width: 100%;">
+            <table style="width:100%; min-width: 490px; border-collapse: collapse; table-layout: auto;">
+                <thead>
+                    <tr style="text-align:left; border-bottom: 1px solid #ddd;">
+                        <th style="padding:8px; width: 24%; white-space: nowrap;">更新日時</th>
+                        <th style="padding:8px; width: 25%;">ファイル名</th>
+                        <th style="padding:8px; width: 20%; white-space: nowrap;">File ID</th>
+                        <th style="padding:8px; white-space: nowrap;">削除</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in box_files %}
+                    <tr style="border-bottom: 1px solid #f0f0f0;">
+                        <td style="padding:8px; white-space: nowrap;">
+                            {% set ts = (item.updatedAt or item.createdAt or "-") %}
+                            {% if ts != "-" and ts|length >= 19 %}
+                            {{ ts[0:19]|replace("T", " ") }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td style="padding:8px; overflow-wrap: anywhere;">{{ item.fileName or "-" }}</td>
+                        <td style="padding:8px 6px; font-family: monospace; white-space: nowrap;">{{ item.fileId or "-" }}</td>
+                        <td style="padding:8px 6px; white-space: nowrap;">
+                            {% if item.fileId %}
+                            <form action="{{ url_for('box_delete', file_id=item.fileId) }}" method="post"
+                                onsubmit="return confirm('このファイルを削除しますか？');">
+                                <button type="submit" class="app-btn is-small is-fixed">削除</button>
+                            </form>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="page-lead">まだ履歴がありません。</p>
+        {% endif %}
+    </section>
+
+    <section style="background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; min-width: 0;">
+        <h2 class="page-title">ブロックチェーン</h2>
+
+        {% if chain_error %}
+        <p class="error page-lead">取得に失敗しました: {{ chain_error }}</p>
+        {% endif %}
+
+        {% if records %}
+        <div class="table-wrap" style="overflow-x: auto; max-width: 100%;">
+            <table style="width:100%; min-width: 900px; border-collapse: collapse;">
+                <thead>
+                    <tr style="text-align:left; border-bottom: 1px solid #ddd;">
+                        <th style="padding:8px; width:10%; white-space: nowrap;">アップロード日時</th>
+                        <th style="padding:8px; width:15%;">ファイル名</th>
+                        <th style="padding:8px; width:20%; white-space: nowrap;">
+                            File ID
+                            <span class="help-tooltip-wrap" data-help-tooltip>
+                                <button type="button" class="help-tooltip" aria-expanded="false">?</button>
+                                <span class="help-tooltip-text">Boxに保存されたファイルの一意な識別子</span>
+                            </span>
+                        </th>
+                        <th style="padding:8px; width:16%; white-space: nowrap;">
+                            コントラクト
+                            <span class="help-tooltip-wrap" data-help-tooltip>
+                                <button type="button" class="help-tooltip" aria-expanded="false">?</button>
+                                <span class="help-tooltip-text">参照・保存に使うプログラム名</span>
+                            </span>
+                        </th>
+                        <th style="padding:8px; width:20%; white-space: nowrap;">
+                            コントラクトアドレス
+                            <span class="help-tooltip-wrap" data-help-tooltip>
+                                <button type="button" class="help-tooltip" aria-expanded="false">?</button>
+                                <span class="help-tooltip-text">ブロックチェーン上でコントラクトを特定する住所</span>
+                            </span>
+                        </th>
+                        <th style="padding:8px; white-space: nowrap;">参照</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in records %}
+                    <tr style="border-bottom: 1px solid #f0f0f0;">
+                        <td style="padding:8px; white-space: nowrap;">
+                            {% set ts = (item.updatedAt or item.uploadedAt or "-") %}
+                            {% if ts != "-" and ts|length >= 19 %}
+                            {{ ts[0:19]|replace("T", " ") }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td style="padding:8px;">{{ item.fileName or "-" }}</td>
+                        <td style="padding:8px 4px 8px 8px; font-family: monospace; white-space: nowrap;">{{ item.fileId or "-" }}</td>
+                        <td style="padding:8px; white-space: nowrap;">FileRegistry</td>
+                        <td style="padding:8px; font-family: monospace; white-space: nowrap;">{{ contract_address or "-" }}</td>
+                        <td style="padding:8px; white-space: nowrap;">
+                            {% if item.fileId %}
+                            <a href="{{ url_for('record_detail', file_id=item.fileId) }}" class="app-btn is-compact is-fixed">参照</a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="page-lead">まだ履歴がありません。</p>
+        {% endif %}
+    </section>
 </div>
-{% else %}
-<p>まだ履歴がありません。</p>
-{% endif %}
 {% endblock %}

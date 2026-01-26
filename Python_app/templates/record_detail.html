@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>ファイル詳細</h1>
+<h1>参照</h1>
 
 {% if chain_error %}
 <p class="error">取得に失敗しました: {{ chain_error }}</p>
@@ -51,28 +51,28 @@
             data-advanced='{{ "【データ構造】\\n" ~ (detail_contract | tojson(indent=2)) }}'
             data-advanced-note='{{ contract_address_note | e }}'
             data-stage-items="contractAddress"
-            data-stage-target="chain">コントラクトアドレスを指定</div>
+            data-stage-target="chain">コントラクトアドレスを指定<span class="flow-step-hint">詳細 ▸</span></div>
           <div class="flow-step flow-node" style="--delay: 0s;"
             data-title="コントラクト（関数）を指定"
             data-beginner="どの窓口（関数）に問い合わせるか決める"
             data-advanced='{{ "【データ構造】\\n" ~ (detail_call | tojson(indent=2)) }}'
             data-advanced-note='{{ contract_call_note | e }}'
             data-stage-items="function,args"
-            data-stage-target="chain">コントラクトを指定</div>
+            data-stage-target="chain">コントラクトを指定<span class="flow-step-hint">詳細 ▸</span></div>
           <div class="flow-step flow-node" style="--delay: 0s;"
             data-title="File IDを指定"
             data-beginner="探したい荷物の番号を伝える"
             data-advanced='{{ "【データ構造】\\n" ~ (detail_file_id | tojson(indent=2)) }}'
             data-advanced-note='{{ file_id_note | e }}'
             data-stage-items="fileId"
-            data-stage-target="chain">File IDを指定</div>
+            data-stage-target="chain">File IDを指定<span class="flow-step-hint">詳細 ▸</span></div>
           <div class="flow-step flow-node" style="--delay: 0s;"
             data-title="データを出力"
             data-beginner="該当する荷物の情報が返ってくる"
             data-advanced='{{ "【データ構造】\\n" ~ output_json }}'
             data-advanced-note='{{ output_note | e }}'
             data-stage-items="exists,fileHash,fileName,updatedAt"
-            data-stage-target="chain">データを出力</div>
+            data-stage-target="chain">データを出力<span class="flow-step-hint">詳細 ▸</span></div>
           <div class="flow-column-header flow-node flow-node-last" style="--delay: 0s;"
             data-title="ローカル"
             data-beginner="取得したデータをローカルで確認します。"
@@ -105,10 +105,10 @@
         </div>
       </div>
       <div class="flow-controls">
-        <button class="flow-btn" type="button" data-flow-control="start"><span class="flow-btn-icon">▶</span>スタート</button>
-        <button class="flow-btn" type="button" data-flow-control="pause"><span class="flow-btn-icon">⏸</span>停止</button>
-        <button class="flow-btn" type="button" data-flow-control="prev"><span class="flow-btn-icon">⏪</span>戻る</button>
-        <button class="flow-btn" type="button" data-flow-control="next"><span class="flow-btn-icon">⏩</span>次</button>
+        <button class="app-btn is-compact" type="button" data-flow-control="start"><span class="flow-btn-icon">▶</span>スタート</button>
+        <button class="app-btn is-compact" type="button" data-flow-control="pause"><span class="flow-btn-icon">⏸</span>停止</button>
+        <button class="app-btn is-compact" type="button" data-flow-control="prev"><span class="flow-btn-icon">⏪</span>戻る</button>
+        <button class="app-btn is-compact" type="button" data-flow-control="next"><span class="flow-btn-icon">⏩</span>次</button>
       </div>
     </div>
   </div>
@@ -125,13 +125,13 @@
 <p>該当するレコードが見つかりませんでした。</p>
 {% endif %}
 
-<p><a href="{{ url_for('records') }}" class="btn btn-secondary">一覧へ戻る</a></p>
+<p><a href="{{ url_for('records') }}" class="app-btn">一覧へ戻る</a></p>
 
 <div class="flow-modal-overlay" data-flow-modal-overlay>
   <div class="flow-modal" role="dialog" aria-modal="true" aria-labelledby="flow-modal-title">
     <div class="flow-modal-header">
       <div class="flow-modal-title" id="flow-modal-title"></div>
-      <button class="flow-modal-close" type="button" data-flow-modal-close>閉じる</button>
+      <button class="app-btn" type="button" data-flow-modal-close>閉じる</button>
     </div>
     <div class="flow-modal-body">
       <div class="flow-modal-box" data-flow-modal-beginner></div>
@@ -163,6 +163,7 @@
     const controlPrev = document.querySelector("[data-flow-control='prev']");
     const controlNext = document.querySelector("[data-flow-control='next']");
     let contractHighlightTimer = null;
+    let contractEnlargeTarget = null;
 
     const parseItems = (value) =>
       (value || "")
@@ -202,6 +203,7 @@
         clearTimeout(contractHighlightTimer);
         contractHighlightTimer = null;
       }
+      contractEnlargeTarget = null;
     };
 
     const renderContractAddressStage = () => {
@@ -211,7 +213,7 @@
       stageTitleChain.textContent = "ブロックチェーン";
       if (stageListChain) stageListChain.innerHTML = "";
       const container = document.createElement("div");
-      container.className = "flow-chain";
+      container.className = "flow-chain is-contract-address";
       const track = document.createElement("div");
       track.className = "flow-chain-track";
       const blocks = [];
@@ -230,7 +232,8 @@
       requestAnimationFrame(() => {
         stageCardChain.classList.remove("is-hiding");
       });
-      return blocks[1] || blocks[0] || null;
+      contractEnlargeTarget = blocks[1] || blocks[0] || null;
+      return contractEnlargeTarget;
     };
 
     const renderContractSelectStage = () => {
@@ -243,16 +246,19 @@
       container.className = "flow-chain";
       const track = document.createElement("div");
       track.className = "flow-chain-track";
+      const topBlock = document.createElement("div");
+      topBlock.className = "flow-chain-block is-tiny";
+      track.appendChild(topBlock);
       const block = document.createElement("div");
       block.className = "flow-chain-block is-large flow-contract";
       const content = document.createElement("div");
       content.className = "flow-chain-block-content";
       const list = document.createElement("ul");
       list.className = "flow-chain-block-list is-file-list";
-      ["関数1", "関数2", "関数3", "関数4", "..."].forEach((label) => {
+      ["関数：getLatestRecord", "関数：FileRegistry", "関数：verifyFileHash", "関数：listFileHistory", "..."].forEach((label) => {
         const item = document.createElement("li");
         item.textContent = label;
-        if (label === "関数2") {
+        if (label === "関数：FileRegistry") {
           item.classList.add("is-highlight");
         }
         list.appendChild(item);
@@ -260,6 +266,12 @@
       content.appendChild(list);
       block.appendChild(content);
       track.appendChild(block);
+      const bottomLargeA = document.createElement("div");
+      bottomLargeA.className = "flow-chain-block is-tiny";
+      const bottomLargeB = document.createElement("div");
+      bottomLargeB.className = "flow-chain-block is-tiny";
+      track.appendChild(bottomLargeA);
+      track.appendChild(bottomLargeB);
       container.appendChild(track);
       stageCardChain.appendChild(container);
       stageCardChain.classList.remove("is-visible");
@@ -278,26 +290,51 @@
       container.className = "flow-chain";
       const track = document.createElement("div");
       track.className = "flow-chain-track";
+      const topBlock = document.createElement("div");
+      topBlock.className = "flow-chain-block is-tiny";
+      track.appendChild(topBlock);
       const block = document.createElement("div");
       block.className = "flow-chain-block is-large flow-file-id";
       const content = document.createElement("div");
       content.className = "flow-chain-block-content";
       const heading = document.createElement("div");
-      heading.textContent = "関数2";
+      heading.textContent = "FileRegistry";
       content.appendChild(heading);
       const list = document.createElement("ul");
       list.className = "flow-chain-block-list";
-      ["File ID 1", "File ID 2", "File ID 3", "..."].forEach((label) => {
+      const fileIdValue = {{ file_id | tojson }};
+      const fileIdDigits = String(fileIdValue || "").replace(/\D/g, "");
+      const fileIdLength = fileIdDigits.length || 8;
+      const makeFileIdNumber = () => {
+        let result = "";
+        for (let i = 0; i < fileIdLength; i += 1) {
+          result += Math.floor(Math.random() * 10);
+        }
+        return result;
+      };
+      const fileIdItems = [
+        `File ID：${makeFileIdNumber()}`,
+        `File ID：${fileIdDigits || makeFileIdNumber()}`,
+        `File ID：${makeFileIdNumber()}`,
+        `File ID：${makeFileIdNumber()}`,
+      ];
+      fileIdItems.forEach((label, index) => {
         const item = document.createElement("li");
         item.textContent = label;
-        if (label === "File ID 2") {
+        if (index === 1) {
           item.classList.add("is-highlight");
         }
-        list.appendChild(item);
-      });
+      list.appendChild(item);
+    });
       content.appendChild(list);
       block.appendChild(content);
       track.appendChild(block);
+      const bottomLargeA = document.createElement("div");
+      bottomLargeA.className = "flow-chain-block is-tiny";
+      const bottomLargeB = document.createElement("div");
+      bottomLargeB.className = "flow-chain-block is-tiny";
+      track.appendChild(bottomLargeA);
+      track.appendChild(bottomLargeB);
       container.appendChild(track);
       stageCardChain.appendChild(container);
       stageCardChain.classList.remove("is-visible");
@@ -316,9 +353,18 @@
       container.className = "flow-chain";
       const track = document.createElement("div");
       track.className = "flow-chain-track";
+      const topBlock = document.createElement("div");
+      topBlock.className = "flow-chain-block is-tiny";
+      track.appendChild(topBlock);
       const block = document.createElement("div");
       block.className = "flow-chain-block is-large";
       track.appendChild(block);
+      const bottomLargeA = document.createElement("div");
+      bottomLargeA.className = "flow-chain-block is-tiny";
+      const bottomLargeB = document.createElement("div");
+      bottomLargeB.className = "flow-chain-block is-tiny";
+      track.appendChild(bottomLargeA);
+      track.appendChild(bottomLargeB);
       const outputWrapper = document.createElement("div");
       outputWrapper.className = "flow-output-wrapper";
       const output = document.createElement("div");
@@ -499,6 +545,13 @@
       };
 
       const applyStepEnd = (step) => {
+        const stepTitle = (step.dataset.title || step.textContent || "").trim();
+        if (stepTitle === "コントラクトアドレスを指定") {
+          if (contractEnlargeTarget) {
+            contractEnlargeTarget.classList.add("is-enlarged");
+          }
+          return;
+        }
         if (!step.dataset.stageItems) return;
         buildStage(step);
       };
@@ -584,11 +637,21 @@
 
       const jumpToStep = (index) => {
         if (index < 0 || index >= timelineSteps.length) return;
-        pausePlayback();
+        const wasPlaying = isPlaying;
+        if (wasPlaying) {
+          elapsedMs += performance.now() - playStart;
+        }
         const entry = timelineSteps[index];
+        clearTimers();
         applyStepStart(entry.step);
         elapsedMs = entry.adjustedStartMs ?? entry.startMs;
         currentIndex = index;
+        if (wasPlaying) {
+          playStart = performance.now();
+          scheduleFrom(elapsedMs);
+        } else {
+          setFlowAnimationState("paused");
+        }
       };
 
       if (controlStart) controlStart.addEventListener("click", startPlayback);

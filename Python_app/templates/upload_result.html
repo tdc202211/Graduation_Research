@@ -98,7 +98,7 @@
               data-beginner="配送物を倉庫からピッキングする"
               data-advanced='{{ extracted_advanced | e }}'
               data-stage-items="ファイルハッシュ,ファイル名,ファイルID"
-              data-stage-target="local">ファイルから情報を抽出</div>
+              data-stage-target="local">ファイルから情報を抽出<span class="flow-step-hint">詳細 ▸</span></div>
             <div class="flow-step flow-node" style="--delay: 0s;"
               data-title="データをエンコード"
               data-beginner="配送物を送れる形に整えて包装する"
@@ -108,7 +108,7 @@
               data-stage-items="バイト列"
               data-hide-placeholder="true"
               data-stage-mode="stack"
-              data-stage-target="local">データをエンコード</div>
+              data-stage-target="local">データをエンコード<span class="flow-step-hint">詳細 ▸</span></div>
             <div class="flow-step flow-node" style="--delay: 0s;"
               data-title="トランザクションの作成"
               data-beginner="箱に詰めて、送り先などの伝票を書く"
@@ -116,7 +116,7 @@
               data-advanced-note='{{ tx_create_note | e }}'
               data-preview-url="{{ url_for('preview_presign') }}"
               data-stage-items="from,to,nonce,gas/fee,input"
-              data-stage-target="local">トランザクションの作成</div>
+              data-stage-target="local">トランザクションの作成<span class="flow-step-hint">詳細 ▸</span></div>
             <div class="flow-step flow-node" style="--delay: 0s;"
               data-title="トランザクションを署名"
               data-beginner="送り主のサインをする（本人確認）"
@@ -124,12 +124,12 @@
               data-advanced-note='{{ tx_sign_note | e }}'
               data-preview-url="{{ url_for('preview_signed') }}"
               data-stage-items="署名(v,r,s),txHash"
-              data-stage-target="local">トランザクションを署名</div>
+              data-stage-target="local">トランザクションを署名<span class="flow-step-hint">詳細 ▸</span></div>
             <div class="flow-step flow-node" style="--delay: 0s;"
               data-title="トランザクションを送信"
               data-beginner="トラックに積み込む"
               data-advanced="なし"
-              data-stage-target="chain">トランザクションを送信</div>
+              data-stage-target="chain">トランザクションを送信<span class="flow-step-hint">詳細 ▸</span></div>
             <div class="flow-column-header flow-node" style="--delay: 0s;"
               data-title="ブロックチェーン"
               data-beginner="ここからはネットワーク側の処理です。"
@@ -139,7 +139,7 @@
               data-beginner="包装を解いて家に設置"
               data-advanced='{{ storage_advanced | e }}'
               data-stage-items="base_slot,raw_slots,decoded_by_schema"
-              data-stage-target="chain">データをストレージに保管</div>
+              data-stage-target="chain">データをストレージに保管<span class="flow-step-hint">詳細 ▸</span></div>
           </div>
         </div>
       </div>
@@ -175,10 +175,10 @@
           </div>
         </div>
         <div class="flow-controls">
-          <button class="flow-btn" type="button" data-flow-control="start"><span class="flow-btn-icon">▶</span>スタート</button>
-          <button class="flow-btn" type="button" data-flow-control="pause"><span class="flow-btn-icon">⏸</span>停止</button>
-          <button class="flow-btn" type="button" data-flow-control="prev"><span class="flow-btn-icon">⏪</span>戻る</button>
-          <button class="flow-btn" type="button" data-flow-control="next"><span class="flow-btn-icon">⏩</span>次</button>
+          <button class="app-btn is-compact" type="button" data-flow-control="start"><span class="flow-btn-icon">▶</span>スタート</button>
+          <button class="app-btn is-compact" type="button" data-flow-control="pause"><span class="flow-btn-icon">⏸</span>停止</button>
+          <button class="app-btn is-compact" type="button" data-flow-control="prev"><span class="flow-btn-icon">⏪</span>戻る</button>
+          <button class="app-btn is-compact" type="button" data-flow-control="next"><span class="flow-btn-icon">⏩</span>次</button>
         </div>
       </div>
     </div>
@@ -194,8 +194,8 @@
   </div>
 
   <div class="actions">
-    <a class="btn primary" href="{{ url_for('upload') }}">別のファイルをアップロード</a>
-    <a class="btn" href="{{ url_for('index') }}">Home に戻る</a>
+    <a class="app-btn" href="{{ url_for('upload') }}">別のファイルをアップロード</a>
+    <a class="app-btn" href="{{ url_for('index') }}">Home に戻る</a>
   </div>
 </div>
 
@@ -203,7 +203,7 @@
   <div class="flow-modal" role="dialog" aria-modal="true" aria-labelledby="flow-modal-title">
     <div class="flow-modal-header">
       <div class="flow-modal-title" id="flow-modal-title"></div>
-      <button class="flow-modal-close" type="button" data-flow-modal-close>閉じる</button>
+      <button class="app-btn" type="button" data-flow-modal-close>閉じる</button>
     </div>
     <div class="flow-modal-body">
       <div class="flow-modal-box" data-flow-modal-beginner></div>
@@ -1001,11 +1001,21 @@
 
       const jumpToStep = (index) => {
         if (index < 0 || index >= timelineSteps.length) return;
-        pausePlayback();
+        const wasPlaying = isPlaying;
+        if (wasPlaying) {
+          elapsedMs += performance.now() - playStart;
+        }
         const entry = timelineSteps[index];
+        clearTimers();
         applyStepStart(entry.step);
         elapsedMs = entry.adjustedStartMs ?? entry.startMs;
         currentIndex = index;
+        if (wasPlaying) {
+          playStart = performance.now();
+          scheduleFrom(elapsedMs);
+        } else {
+          setFlowAnimationState("paused");
+        }
       };
 
       if (controlStart) controlStart.addEventListener("click", startPlayback);
