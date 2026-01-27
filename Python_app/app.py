@@ -7,6 +7,7 @@ import json
 import secrets
 import threading
 import time
+import hashlib
 from datetime import datetime, timezone, timedelta
 import subprocess
 import sys
@@ -19,6 +20,7 @@ from eth_client import EthereumClient
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(dotenv_path=BASE_DIR / ".env")
+VERIFY_UPLOAD_DIR = BASE_DIR / "verify_uploads"
 
 app = Flask(__name__)
 logging.getLogger("boxsdk").setLevel(logging.ERROR)
@@ -457,6 +459,10 @@ def records():
 def record_detail(file_id):
     chain_error = None
     record = None
+    verify_file_name = None
+    verify_file_hash = None
+    verify_name_match = None
+    verify_hash_match = None
     try:
         eth = EthereumClient()
         res = eth.get_latest(file_id)
@@ -465,6 +471,35 @@ def record_detail(file_id):
     except Exception as ex:
         chain_error = f"{type(ex).__name__}: {ex}"
 
+    verify_file_id = session.get("verify_file_id")
+    verify_file_path = session.get("verify_file_path")
+    verify_name = session.get("verify_file_name")
+    if verify_file_id == file_id and verify_file_path:
+        path = Path(verify_file_path)
+        if path.exists():
+            try:
+                hasher = hashlib.sha256()
+                with path.open("rb") as f:
+                    for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                        hasher.update(chunk)
+                verify_file_hash = hasher.hexdigest()
+                verify_file_name = verify_name
+            except Exception:
+                verify_file_hash = None
+                verify_file_name = verify_name
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        session.pop("verify_file_id", None)
+        session.pop("verify_file_path", None)
+        session.pop("verify_file_name", None)
+
+    if record and verify_file_name:
+        verify_name_match = record.get("fileName") == verify_file_name
+    if record and verify_file_hash:
+        verify_hash_match = record.get("fileHash", "").lower() == verify_file_hash.lower()
+
     contract_address = os.getenv("ETH_CONTRACT_ADDRESS")
     return render_template(
         "record_detail.html",
@@ -472,7 +507,45 @@ def record_detail(file_id):
         file_id=file_id,
         chain_error=chain_error,
         contract_address=contract_address,
+        verify_file_name=verify_file_name,
+        verify_file_hash=verify_file_hash,
+        verify_name_match=verify_name_match,
+        verify_hash_match=verify_hash_match,
     )
+
+
+@app.route("/records/<file_id>/prepare", methods=["GET", "POST"])
+def record_prepare(file_id):
+    if request.method == "POST":
+        file = request.files.get("file")
+        if file is None or file.filename == "":
+            return render_template(
+                "record_prepare.html",
+                file_id=file_id,
+                error="ファイルを選択してください。",
+            )
+        VERIFY_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        token = secrets.token_urlsafe(12)
+        suffix = Path(file.filename).suffix
+        tmp_path = VERIFY_UPLOAD_DIR / f"{file_id}_{token}{suffix}"
+        try:
+            file.save(tmp_path)
+            session["verify_file_id"] = file_id
+            session["verify_file_path"] = str(tmp_path)
+            session["verify_file_name"] = file.filename
+        except Exception:
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+            except OSError:
+                pass
+            return render_template(
+                "record_prepare.html",
+                file_id=file_id,
+                error="ファイルの保存に失敗しました。",
+            )
+        return redirect(url_for("record_detail", file_id=file_id))
+    return render_template("record_prepare.html", file_id=file_id)
 
 
 @app.route("/box/delete/<file_id>", methods=["POST"])

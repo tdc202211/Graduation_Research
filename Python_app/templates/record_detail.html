@@ -125,6 +125,59 @@
 <p>該当するレコードが見つかりませんでした。</p>
 {% endif %}
 
+<h1>検証</h1>
+<table style="width:100%; margin: 16px 0; border-collapse: collapse; table-layout: fixed;">
+  <colgroup>
+    <col style="width:45%;">
+    <col style="width:10%;">
+    <col style="width:45%;">
+  </colgroup>
+  <tbody>
+    <tr>
+      <td style="background: #f3f4f6; border: 1px solid #e5e7eb; padding: 12px 14px; vertical-align: middle; text-align: center; height: 72px;">
+        <div style="font-weight: 600; margin-bottom: 6px;">入力ファイル名</div>
+        <div data-verify-file-name>{{ verify_file_name or "-" }}</div>
+      </td>
+      <td style="border: 1px solid #e5e7eb; vertical-align: middle; text-align: center; height: 72px;">
+        {% if verify_name_match is not none %}
+          {% if verify_name_match %}
+          <div style="font-weight: 700; color: #15803d;">一致</div>
+          {% else %}
+          <div style="font-weight: 700; color: #c00;">不一致</div>
+          {% endif %}
+        {% else %}
+          <div style="color: #6b7280;">未判定</div>
+        {% endif %}
+      </td>
+      <td style="background: #d1d5db; border: 1px solid #e5e7eb; vertical-align: middle; text-align: center; height: 72px;">
+        <div style="font-weight: 600; margin-bottom: 6px;">参照ファイル名</div>
+        <div>{{ record.fileName if record else "-" }}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="background: #f3f4f6; border: 1px solid #e5e7eb; padding: 12px 14px; vertical-align: middle; text-align: center; height: 72px;">
+        <div style="font-weight: 600; margin-bottom: 6px;">再計算ハッシュ値</div>
+        <div data-verify-file-hash style="font-family: monospace;">{{ verify_file_hash or "-" }}</div>
+      </td>
+      <td style="border: 1px solid #e5e7eb; vertical-align: middle; text-align: center; height: 72px;">
+        {% if verify_hash_match is not none %}
+          {% if verify_hash_match %}
+          <div style="font-weight: 700; color: #15803d;">一致</div>
+          {% else %}
+          <div style="font-weight: 700; color: #c00;">不一致</div>
+          {% endif %}
+        {% else %}
+          <div style="color: #6b7280;">未判定</div>
+        {% endif %}
+      </td>
+      <td style="background: #d1d5db; border: 1px solid #e5e7eb; vertical-align: middle; text-align: center; height: 72px;">
+        <div style="font-weight: 600; margin-bottom: 6px;">参照ハッシュ値</div>
+        <div style="font-family: monospace;">{{ record.fileHash if record else "-" }}</div>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
 <p><a href="{{ url_for('records') }}" class="app-btn">一覧へ戻る</a></p>
 
 <div class="flow-modal-overlay" data-flow-modal-overlay>

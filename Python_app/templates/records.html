@@ -110,7 +110,7 @@
                         <td style="padding:8px; font-family: monospace; white-space: nowrap;">{{ contract_address or "-" }}</td>
                         <td style="padding:8px; white-space: nowrap;">
                             {% if item.fileId %}
-                            <a href="{{ url_for('record_detail', file_id=item.fileId) }}" class="app-btn is-compact is-fixed">参照</a>
+                            <a href="{{ url_for('record_prepare', file_id=item.fileId) }}" class="app-btn is-compact is-fixed">参照・検証</a>
                             {% else %}
                             -
                             {% endif %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="page-title">参照前のファイル選択</h1>
+<p class="page-lead">検証に使うファイルを選んでから参照ページへ進みます。</p>
+
+{% if error %}
+<p class="error page-lead">{{ error }}</p>
+{% endif %}
+
+<div class="form-center">
+  <form action="{{ url_for('record_prepare', file_id=file_id) }}" method="post" enctype="multipart/form-data">
+    <input type="file" name="file" required />
+    <div style="margin-top: 12px;">
+      <button type="submit" class="app-btn">参照ページへ進む</button>
+    </div>
+  </form>
+</div>
+
+<p style="margin-top: 18px; text-align: center;">
+  <a href="{{ url_for('records') }}" class="app-btn">一覧へ戻る</a>
+</p>
+{% endblock %}
